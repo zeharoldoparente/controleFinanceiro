@@ -126,6 +126,28 @@ class Despesa {
          mesaId,
       ]);
    }
+
+   static async atualizarComprovante(id, mesaId, comprovante) {
+      await db.query(
+         "UPDATE despesas SET comprovante = ? WHERE id = ? AND mesa_id = ?",
+         [comprovante, id, mesaId],
+      );
+   }
+
+   static async getComprovante(id, mesaId) {
+      const [rows] = await db.query(
+         "SELECT comprovante FROM despesas WHERE id = ? AND mesa_id = ?",
+         [id, mesaId],
+      );
+      return rows[0]?.comprovante;
+   }
+
+   static async removerComprovante(id, mesaId) {
+      await db.query(
+         "UPDATE despesas SET comprovante = NULL WHERE id = ? AND mesa_id = ?",
+         [id, mesaId],
+      );
+   }
 }
 
 module.exports = Despesa;
