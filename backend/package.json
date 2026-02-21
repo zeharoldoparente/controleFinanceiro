@@ -9,8 +9,8 @@
       "dev": "nodemon src/server.js"
    },
    "keywords": [],
-   "author": "",
-   "license": "ISC",
+   "author": "José Aroldo Soares Bezerra <joseharoldoparente@gmail.com> (NASAM Dev.)",
+   "license": "MIT",
    "type": "commonjs",
    "dependencies": {
       "bcryptjs": "^3.0.3",
