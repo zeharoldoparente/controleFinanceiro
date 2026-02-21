@@ -15,6 +15,10 @@ app.use(
    swaggerUi.setup(swaggerSpec, {
       customCss: ".swagger-ui .topbar { display: none }",
       customSiteTitle: "API Controle Financeiro - Documentação",
+      swaggerOptions: {
+         docExpansion: "none",
+         defaultModelsExpandDepth: -1,
+      },
    }),
 );
 db.getConnection()
