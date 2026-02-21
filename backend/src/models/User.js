@@ -10,7 +10,7 @@ class User {
    }
    static async findById(id) {
       const [rows] = await db.query(
-         "SELECT id, nome, email, created_at FROM users WHERE id = ?",
+         "SELECT id, nome, email, tipo_plano, created_at FROM users WHERE id = ?",
          [id],
       );
       return rows[0];

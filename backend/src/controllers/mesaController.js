@@ -1,6 +1,9 @@
 const Mesa = require("../models/Mesa");
+const User = require("../models/User");
+const db = require("../config/database");
 
 class MesaController {
+   // Criar nova mesa
    static async create(req, res) {
       try {
          const { nome } = req.body;
@@ -12,7 +15,33 @@ class MesaController {
                .json({ error: "Nome da mesa é obrigatório" });
          }
 
+         const user = await User.findById(userId);
+         console.log("👤 USUÁRIO:", user); // LOG 1
+
+         const [mesasCriadas] = await db.query(
+            "SELECT COUNT(*) as total FROM mesas WHERE criador_id = ?",
+            [userId],
+         );
+         console.log("📊 MESAS CRIADAS:", mesasCriadas); // LOG 2
+         console.log("🔢 TOTAL:", mesasCriadas[0].total); // LOG 3
+         console.log("✅ TIPO PLANO:", user.tipo_plano); // LOG 4
+         console.log(
+            "🚫 VAI BLOQUEAR?",
+            user.tipo_plano === "free" && mesasCriadas[0].total >= 2,
+         ); // LOG 5
+
+         if (user.tipo_plano === "free" && mesasCriadas[0].total >= 2) {
+            return res.status(400).json({
+               error: "Você atingiu o limite de 2 mesas no plano gratuito",
+            });
+         }
+
          const mesaId = await Mesa.create(nome, userId);
+
+         await db.query(
+            'UPDATE mesa_usuarios SET papel = "criador" WHERE mesa_id = ? AND user_id = ?',
+            [mesaId, userId],
+         );
 
          res.status(201).json({
             message: "Mesa criada com sucesso!",
@@ -24,6 +53,7 @@ class MesaController {
       }
    }
 
+   // Listar mesas do usuário
    static async list(req, res) {
       try {
          const userId = req.userId;
@@ -36,6 +66,7 @@ class MesaController {
       }
    }
 
+   // Buscar mesa específica
    static async show(req, res) {
       try {
          const { id } = req.params;
@@ -54,6 +85,7 @@ class MesaController {
       }
    }
 
+   // Atualizar mesa
    static async update(req, res) {
       try {
          const { id } = req.params;
@@ -80,6 +112,7 @@ class MesaController {
       }
    }
 
+   // Deletar mesa
    static async delete(req, res) {
       try {
          const { id } = req.params;
