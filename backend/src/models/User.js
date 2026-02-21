@@ -26,6 +26,20 @@ class User {
    static async verificarSenha(senha, senhaHash) {
       return await bcrypt.compare(senha, senhaHash);
    }
+
+   static async verificarEmail(userId) {
+      await db.query("UPDATE users SET email_verificado = TRUE WHERE id = ?", [
+         userId,
+      ]);
+   }
+
+   static async atualizarSenha(userId, novaSenha) {
+      const senhaHash = await bcrypt.hash(novaSenha, 10);
+      await db.query("UPDATE users SET senha = ? WHERE id = ?", [
+         senhaHash,
+         userId,
+      ]);
+   }
 }
 
 module.exports = User;

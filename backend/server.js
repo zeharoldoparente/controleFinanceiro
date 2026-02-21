@@ -2,11 +2,21 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const db = require("./src/config/database");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./swagger");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(
+   "/api-docs",
+   swaggerUi.serve,
+   swaggerUi.setup(swaggerSpec, {
+      customCss: ".swagger-ui .topbar { display: none }",
+      customSiteTitle: "API Controle Financeiro - Documentação",
+   }),
+);
 db.getConnection()
    .then(() => console.log("✅ Conectado ao MySQL!"))
    .catch((err) => console.error("❌ Erro ao conectar:", err));

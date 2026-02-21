@@ -24,7 +24,7 @@ class ConviteController {
          }
 
          const [mesa] = await db.query(
-            "SELECT criador_id FROM mesas WHERE id = ?",
+            "SELECT criador_id, nome FROM mesas WHERE id = ?",
             [mesa_id],
          );
          if (!mesa[0] || mesa[0].criador_id !== userId) {
@@ -60,29 +60,53 @@ class ConviteController {
          );
 
          const usuarioConvidado = await User.findByEmail(email_convidado);
+         const userInfo = await User.findById(userId);
+         const nomeMesa = mesa[0].nome;
+
+         const EmailService = require("../services/emailService");
 
          if (usuarioConvidado) {
-            const mesaInfo = await Mesa.findById(mesa_id, userId);
-            const userInfo = await User.findById(userId);
-
             await Notificacao.create(
                usuarioConvidado.id,
                "convite_mesa",
                "Novo convite de mesa",
-               `${userInfo.nome} convidou você para participar da mesa "${mesaInfo.nome}"`,
+               `${userInfo.nome} convidou você para participar da mesa "${nomeMesa}"`,
                `/convites/${token}`,
                { convite_id: conviteId, mesa_id, token },
             );
 
+            try {
+               await EmailService.enviarEmailConviteExistente(
+                  email_convidado,
+                  userInfo.nome,
+                  nomeMesa,
+                  token,
+               );
+            } catch (emailError) {
+               console.error("Erro ao enviar email:", emailError);
+            }
+
             res.status(201).json({
-               message: "Convite enviado! O usuário receberá uma notificação.",
+               message:
+                  "Convite enviado! O usuário receberá uma notificação e um email.",
                conviteId,
                usuarioCadastrado: true,
             });
          } else {
+            try {
+               await EmailService.enviarEmailConviteNovo(
+                  email_convidado,
+                  userInfo.nome,
+                  nomeMesa,
+                  token,
+               );
+            } catch (emailError) {
+               console.error("Erro ao enviar email:", emailError);
+            }
+
             res.status(201).json({
                message:
-                  "Convite criado! Um email será enviado para o convidado se cadastrar.",
+                  "Convite criado! Um email foi enviado para o convidado se cadastrar.",
                conviteId,
                token,
                usuarioCadastrado: false,
