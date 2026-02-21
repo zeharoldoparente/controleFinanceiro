@@ -199,18 +199,20 @@ APP_URL=http://localhost:3001
 
 ### Passo 4: Crie o banco de dados
 
-Execute o script SQL localizado em `database/schema.sql`:
+Execute o script SQL fornecido:
 
 ```bash
 mysql -u root -p < database/schema.sql
 ```
 
-Ou execute manualmente no MySQL:
+Ou importe manualmente via MySQL Workbench / phpMyAdmin.
 
-```sql
-CREATE DATABASE controle_financeiro;
--- Execute todos os CREATE TABLE...
-```
+O script irá:
+
+- ✅ Criar o banco de dados `controle_financeiro`
+- ✅ Criar todas as 13 tabelas com estrutura completa
+- ✅ Inserir categorias padrão
+- ✅ Inserir formas de pagamento padrão
 
 ### Passo 5: Inicie o servidor
 
