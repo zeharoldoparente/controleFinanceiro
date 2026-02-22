@@ -4,40 +4,37 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import authService from "@/services/authService";
 import Image from "next/image";
+import type { User } from "@/types";
 
 export default function DashboardPage() {
    const router = useRouter();
-   const [user, setUser] = useState<any>(null);
+   const [user, setUser] = useState<User | null>(null);
 
    useEffect(() => {
-      // Verificar se está autenticado
-      if (!authService.isAuthenticated()) {
-         router.push("/login");
-         return;
-      }
+      const checkAuth = () => {
+         if (!authService.isAuthenticated()) {
+            router.push("/login");
+            return;
+         }
 
-      // Pegar dados do usuário
-      const userData = authService.getUser();
-      setUser(userData);
+         const userData = authService.getUser();
+         setUser(userData);
+      };
+
+      checkAuth();
    }, [router]);
-
    const handleLogout = () => {
       authService.logout();
       router.push("/login");
    };
-
    if (!user) {
-      return (
-         <div className="min-h-screen flex items-center justify-center">
-            <div className="text-lg text-gray-600">Carregando...</div>
-         </div>
-      );
+      return null;
    }
 
    return (
       <div className="min-h-screen bg-gray-50">
          {/* Header */}
-         <header className="bg-gradient-to-r from-[#035E3D] to-[#1E8449] rounded=2xl shadow-sm">
+         <header className="bg-gradient-to-r from-[#035E3D] to-[#1E8449] shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                <div className="flex justify-between items-center h-16">
                   {/* Logo */}
@@ -53,7 +50,7 @@ export default function DashboardPage() {
                   </div>
                   {/* User Menu */}
                   <div className="flex items-center space-x-8">
-                     <span className="text-sm text-gray-600 text-white">
+                     <span className="text-sm text-white">
                         Olá,{" "}
                         <span className="text-lg font-semibold text-white">
                            {user.nome}
@@ -70,14 +67,14 @@ export default function DashboardPage() {
             </div>
          </header>
          {/* Welcome Card */}
-         <div className="">
-            <h2 className="text-lg font-semibold text-black mb-2 pl-3">
+         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <h2 className="text-lg font-semibold text-black mb-2">
                Bem-vindo de volta!
-               <span className="text-xl">👋</span>
+               <span className="text-xl ml-2">👋</span>
             </h2>
          </div>
          {/* Main Content */}
-         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                {/* Card 1 - Receitas */}

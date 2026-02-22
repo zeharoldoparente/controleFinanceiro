@@ -6,6 +6,7 @@ import Image from "next/image";
 import authService from "@/services/authService";
 import { validarSenha } from "@/lib/senhaValidacao";
 import IndicadorSenha from "@/components/IndicadorSenha";
+import { isApiError } from "@/types";
 
 export default function ResetarSenhaPage({
    params,
@@ -62,17 +63,21 @@ export default function ResetarSenhaPage({
          setTimeout(() => {
             router.push("/login");
          }, 2000);
-      } catch (error: any) {
+      } catch (error) {
          console.error("Erro ao resetar senha:", error);
 
-         if (error.response?.data?.message) {
-            setErro(error.response.data.message);
-         } else if (error.response?.status === 400) {
-            setErro(
-               "Token inválido ou expirado. Solicite um novo link de recuperação.",
-            );
+         if (isApiError(error)) {
+            if (error.response?.data?.message) {
+               setErro(error.response.data.message);
+            } else if (error.response?.status === 400) {
+               setErro(
+                  "Token inválido ou expirado. Solicite um novo link de recuperação.",
+               );
+            } else {
+               setErro("Erro ao resetar senha. Tente novamente.");
+            }
          } else {
-            setErro("Erro ao resetar senha. Tente novamente.");
+            setErro("Erro inesperado. Tente novamente.");
          }
       } finally {
          setCarregando(false);

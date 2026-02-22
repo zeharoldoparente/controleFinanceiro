@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import authService from "@/services/authService";
+import { isApiError } from "@/types";
 
 export default function LoginPage() {
    const router = useRouter();
@@ -25,16 +26,19 @@ export default function LoginPage() {
 
          // Redirecionar para dashboard
          router.push("/dashboard");
-      } catch (error: any) {
+      } catch (error) {
          console.error("Erro no login:", error);
 
-         // Tratar diferentes tipos de erro
-         if (error.response?.data?.message) {
-            setErro(error.response.data.message);
-         } else if (error.response?.status === 401) {
-            setErro("Email ou senha incorretos");
+         if (isApiError(error)) {
+            if (error.response?.data?.message) {
+               setErro(error.response.data.message);
+            } else if (error.response?.status === 401) {
+               setErro("Email ou senha incorretos");
+            } else {
+               setErro("Erro ao fazer login. Tente novamente.");
+            }
          } else {
-            setErro("Erro ao fazer login. Tente novamente.");
+            setErro("Erro inesperado. Tente novamente.");
          }
       } finally {
          setCarregando(false);
@@ -93,7 +97,7 @@ export default function LoginPage() {
                      onChange={(e) => setEmail(e.target.value)}
                      required
                      disabled={carregando}
-                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-[green-500/80] focus:border-green-300 outline-none transition-all duration-300 shadow-sm disabled:cursor-not-allowed"
+                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm disabled:cursor-not-allowed"
                   />
                </div>
 
@@ -113,14 +117,14 @@ export default function LoginPage() {
                      onChange={(e) => setSenha(e.target.value)}
                      required
                      disabled={carregando}
-                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-[green-500/80] focus:border-green-300 outline-none transition-all duration-300 shadow-sm"
+                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm"
                   />
                </div>
                {/* Botão */}
                <button
                   type="submit"
                   disabled={carregando}
-                  className="w-full bg-gradient-to-r from-[#042126] to-[#1e8220] text-white py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] mt-6 cursor-pointer"
+                  className="w-full bg-gradient-to-r from-[#042126] to-[#1e8220] text-white py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] mt-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                >
                   {carregando ? "Entrando..." : "Entrar"}
                </button>

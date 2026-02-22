@@ -6,6 +6,7 @@ import Image from "next/image";
 import authService from "@/services/authService";
 import { validarSenha } from "@/lib/senhaValidacao";
 import IndicadorSenha from "@/components/IndicadorSenha";
+import { isApiError } from "@/types";
 
 export default function RegistroPage() {
    const router = useRouter();
@@ -61,21 +62,24 @@ export default function RegistroPage() {
          setTimeout(() => {
             router.push("/login");
          }, 3000);
-      } catch (error: any) {
+      } catch (error) {
          console.error("Erro no registro:", error);
 
-         if (error.response?.data?.message) {
-            setErro(error.response.data.message);
-         } else if (error.response?.status === 400) {
-            setErro("Email já cadastrado ou dados inválidos");
+         if (isApiError(error)) {
+            if (error.response?.data?.message) {
+               setErro(error.response.data.message);
+            } else if (error.response?.status === 400) {
+               setErro("Email já cadastrado ou dados inválidos");
+            } else {
+               setErro("Erro ao criar conta. Tente novamente.");
+            }
          } else {
-            setErro("Erro ao criar conta. Tente novamente.");
+            setErro("Erro inesperado. Tente novamente.");
          }
       } finally {
          setCarregando(false);
       }
    };
-
    return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
          {/* Card Principal */}

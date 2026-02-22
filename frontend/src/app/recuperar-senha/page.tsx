@@ -23,7 +23,7 @@ export default function RecuperarSenhaPage() {
             "Email de recuperação enviado! Verifique sua caixa de entrada e spam.",
          );
          setEmail("");
-      } catch (error: any) {
+      } catch (error) {
          console.error("Erro ao solicitar recuperação:", error);
 
          // Por segurança, sempre mostra mensagem genérica
