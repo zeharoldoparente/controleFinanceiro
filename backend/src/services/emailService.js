@@ -84,7 +84,7 @@ class EmailService {
    }
 
    async enviarEmailRecuperacaoSenha(para, nome, token) {
-      const linkRecuperacao = `${process.env.APP_URL}/api/auth/resetar-senha/${token}`;
+      const linkRecuperacao = `${process.env.FRONTEND_URL}/resetar-senha/${token}`;
 
       const mailOptions = {
          from: process.env.EMAIL_FROM,

@@ -1,17 +1,20 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, use } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import authService from "@/services/authService";
 import { validarSenha } from "@/lib/senhaValidacao";
 import IndicadorSenha from "@/components/IndicadorSenha";
 
-export default function RegistroPage() {
+export default function ResetarSenhaPage({
+   params,
+}: {
+   params: Promise<{ token: string }>;
+}) {
+   const resolvedParams = use(params);
    const router = useRouter();
-   const [nome, setNome] = useState("");
-   const [email, setEmail] = useState("");
-   const [senha, setSenha] = useState("");
+   const [novaSenha, setNovaSenha] = useState("");
    const [confirmarSenha, setConfirmarSenha] = useState("");
    const [erro, setErro] = useState("");
    const [errosSenha, setErrosSenha] = useState<string[]>([]);
@@ -19,9 +22,9 @@ export default function RegistroPage() {
    const [carregando, setCarregando] = useState(false);
 
    // Validar senha em tempo real
-   const handleSenhaChange = (novaSenha: string) => {
-      setSenha(novaSenha);
-      const resultado = validarSenha(novaSenha);
+   const handleSenhaChange = (senha: string) => {
+      setNovaSenha(senha);
+      const resultado = validarSenha(senha);
       setErrosSenha(resultado.erros);
    };
 
@@ -31,14 +34,14 @@ export default function RegistroPage() {
       setSucesso("");
 
       // Validar senha
-      const validacao = validarSenha(senha);
+      const validacao = validarSenha(novaSenha);
       if (!validacao.valida) {
          setErro("Senha não atende aos requisitos de segurança");
          return;
       }
 
       // Verificar se senhas coincidem
-      if (senha !== confirmarSenha) {
+      if (novaSenha !== confirmarSenha) {
          setErro("As senhas não coincidem");
          return;
       }
@@ -46,30 +49,30 @@ export default function RegistroPage() {
       setCarregando(true);
 
       try {
-         await authService.register({ nome, email, senha });
+         await authService.resetarSenha(resolvedParams.token, novaSenha);
 
          setSucesso(
-            "Conta criada com sucesso! Verifique seu email para ativar sua conta.",
+            "Senha alterada com sucesso! Redirecionando para o login...",
          );
 
-         setNome("");
-         setEmail("");
-         setSenha("");
+         setNovaSenha("");
          setConfirmarSenha("");
          setErrosSenha([]);
 
          setTimeout(() => {
             router.push("/login");
-         }, 3000);
+         }, 2000);
       } catch (error: any) {
-         console.error("Erro no registro:", error);
+         console.error("Erro ao resetar senha:", error);
 
          if (error.response?.data?.message) {
             setErro(error.response.data.message);
          } else if (error.response?.status === 400) {
-            setErro("Email já cadastrado ou dados inválidos");
+            setErro(
+               "Token inválido ou expirado. Solicite um novo link de recuperação.",
+            );
          } else {
-            setErro("Erro ao criar conta. Tente novamente.");
+            setErro("Erro ao resetar senha. Tente novamente.");
          }
       } finally {
          setCarregando(false);
@@ -95,9 +98,13 @@ export default function RegistroPage() {
                      />
                   </div>
                </div>
+               {/* Título */}
+               <h2 className="text-xl font-bold text-gray-800 mt-4 mb-2">
+                  Criar Nova Senha
+               </h2>
                {/* Slogan */}
-               <p className="text-sm text-gray-500 font-light mt-2">
-                  Crie sua conta e comece a gerenciar suas finanças
+               <p className="text-sm text-gray-500 font-light">
+                  Digite sua nova senha segura
                </p>
             </div>
 
@@ -124,59 +131,19 @@ export default function RegistroPage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-               {/* Nome */}
+               {/* Nova Senha */}
                <div>
                   <label
-                     htmlFor="nome"
+                     htmlFor="novaSenha"
                      className="block text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider"
                   >
-                     Nome Completo
+                     Nova Senha
                   </label>
                   <input
-                     id="nome"
-                     type="text"
-                     placeholder="Seu nome completo"
-                     value={nome}
-                     onChange={(e) => setNome(e.target.value)}
-                     required
-                     disabled={carregando}
-                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm disabled:cursor-not-allowed"
-                  />
-               </div>
-
-               {/* Email */}
-               <div>
-                  <label
-                     htmlFor="email"
-                     className="block text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider"
-                  >
-                     Email
-                  </label>
-                  <input
-                     id="email"
-                     type="email"
-                     placeholder="seu@email.com"
-                     value={email}
-                     onChange={(e) => setEmail(e.target.value)}
-                     required
-                     disabled={carregando}
-                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm disabled:cursor-not-allowed"
-                  />
-               </div>
-
-               {/* Senha */}
-               <div>
-                  <label
-                     htmlFor="senha"
-                     className="block text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider"
-                  >
-                     Senha
-                  </label>
-                  <input
-                     id="senha"
+                     id="novaSenha"
                      type="password"
                      placeholder="••••••••"
-                     value={senha}
+                     value={novaSenha}
                      onChange={(e) => handleSenhaChange(e.target.value)}
                      required
                      disabled={carregando}
@@ -184,10 +151,10 @@ export default function RegistroPage() {
                   />
 
                   {/* Indicador de força */}
-                  <IndicadorSenha senha={senha} />
+                  <IndicadorSenha senha={novaSenha} />
 
                   {/* Lista de requisitos */}
-                  {senha && errosSenha.length > 0 && (
+                  {novaSenha && errosSenha.length > 0 && (
                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                         <p className="text-xs font-semibold text-red-700 mb-1">
                            Requisitos:
@@ -207,7 +174,7 @@ export default function RegistroPage() {
                   )}
 
                   {/* Senha válida */}
-                  {senha && errosSenha.length === 0 && (
+                  {novaSenha && errosSenha.length === 0 && (
                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
                         <p className="text-xs font-semibold text-green-700 flex items-center">
                            <span className="mr-1">✓</span>
@@ -216,14 +183,13 @@ export default function RegistroPage() {
                      </div>
                   )}
                </div>
-
                {/* Confirmar Senha */}
                <div>
                   <label
                      htmlFor="confirmarSenha"
                      className="block text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider"
                   >
-                     Confirmar Senha
+                     Confirmar Nova Senha
                   </label>
                   <input
                      id="confirmarSenha"
@@ -239,7 +205,7 @@ export default function RegistroPage() {
                   {/* Validação em tempo real */}
                   {confirmarSenha && (
                      <div className="mt-2">
-                        {senha === confirmarSenha ? (
+                        {novaSenha === confirmarSenha ? (
                            <div className="p-2 bg-green-50 border border-green-200 rounded-lg">
                               <p className="text-xs font-semibold text-green-700 flex items-center">
                                  <span className="mr-1">✓</span>
@@ -263,20 +229,20 @@ export default function RegistroPage() {
                   disabled={
                      carregando ||
                      errosSenha.length > 0 ||
-                     (confirmarSenha && senha !== confirmarSenha) ||
-                     !senha ||
+                     (confirmarSenha && novaSenha !== confirmarSenha) ||
+                     !novaSenha ||
                      !confirmarSenha
                   }
                   className="w-full bg-gradient-to-r from-[#042126] to-[#1e8220] text-white py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] mt-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                >
-                  {carregando ? "Criando conta..." : "Criar Conta"}
+                  {carregando ? "Salvando..." : "Redefinir Senha"}
                </button>
             </form>
 
             {/* Links */}
-            <div className="pt-4 text-center">
+            <div className="pt-6 text-center">
                <p className="text-xs text-gray-500">
-                  Já tem uma conta?{" "}
+                  Lembrou a senha?{" "}
                   <a
                      href="/login"
                      className="text-green-600 font-semibold hover:text-green-700 transition-colors duration-200"

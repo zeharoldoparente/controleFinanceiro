@@ -52,6 +52,20 @@ class AuthService {
       const user = localStorage.getItem("user");
       return user ? JSON.parse(user) : null;
    }
+
+   async solicitarRecuperacaoSenha(email: string) {
+      const response = await api.post("/auth/solicitar-recuperacao-senha", {
+         email,
+      });
+      return response.data;
+   }
+
+   async resetarSenha(token: string, novaSenha: string) {
+      const response = await api.post(`/auth/resetar-senha/${token}`, {
+         novaSenha,
+      });
+      return response.data;
+   }
 }
 
 const authService = new AuthService();
