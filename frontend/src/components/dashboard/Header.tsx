@@ -36,7 +36,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                {/* Botão Hamburguer */}
                <button
                   onClick={onMenuToggle}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
                >
                   <svg
                      className="w-5 h-5 text-gray-600"

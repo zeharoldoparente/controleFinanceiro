@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -7,10 +8,17 @@ import Image from "next/image";
 interface SidebarProps {
    isOpen: boolean;
    onToggle: () => void;
+   onHoverChange?: (isHovering: boolean) => void;
 }
 
-export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export default function Sidebar({
+   isOpen,
+   onToggle,
+   onHoverChange,
+}: SidebarProps) {
    const pathname = usePathname();
+   const [isHovering, setIsHovering] = useState(false);
+   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
    const menuItems = [
       {
@@ -153,7 +161,42 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
          href: "/dashboard/configuracoes",
       },
    ];
+
    const isActive = (href: string) => pathname === href;
+
+   // Hover handler com delay de 2 segundos (apenas desktop)
+   const handleMouseEnter = () => {
+      if (window.innerWidth >= 1024) {
+         // lg breakpoint
+         hoverTimeoutRef.current = setTimeout(() => {
+            setIsHovering(true);
+            onHoverChange?.(true);
+         }, 2000); // 2 segundos
+      }
+   };
+
+   const handleMouseLeave = () => {
+      if (hoverTimeoutRef.current) {
+         clearTimeout(hoverTimeoutRef.current);
+      }
+      setIsHovering(false);
+      onHoverChange?.(false);
+   };
+
+   useEffect(() => {
+      return () => {
+         if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current);
+         }
+      };
+   }, []);
+
+   // Desktop: usa hover, Mobile: usa isOpen
+   const shouldBeExpanded =
+      typeof window !== "undefined" && window.innerWidth >= 1024
+         ? isHovering
+         : isOpen;
+
    return (
       <>
          {/* Overlay para mobile */}
@@ -163,26 +206,41 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                onClick={onToggle}
             />
          )}
+
          {/* Sidebar */}
          <aside
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             className={`
                fixed top-0 left-0 h-full bg-gradient-to-b from-[#035E3D] to-[#1E8449] 
-               text-white shadow-2xl z-50 transition-all duration-300 ease-in-out
+               text-white shadow-xl z-50 transition-all duration-300 ease-in-out
                ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-               w-20
+               ${shouldBeExpanded ? "w-50" : "w-20"}
             `}
          >
             {/* Logo */}
             <div className="flex items-center justify-center p-4 border-b border-white/10">
-               <Image
-                  src="/logo_branco.png"
-                  alt="ControlFin"
-                  width={40}
-                  height={40}
-                  className="object-contain"
-                  priority
-               />
+               {shouldBeExpanded ? (
+                  <Image
+                     src="/logo_nome_branco2.png"
+                     alt="ControlFin Logo"
+                     width={140}
+                     height={40}
+                     className="object-contain"
+                     priority
+                  />
+               ) : (
+                  <Image
+                     src="/logo_branco.png"
+                     alt="ControlFin"
+                     width={40}
+                     height={40}
+                     className="object-contain"
+                     priority
+                  />
+               )}
             </div>
+
             {/* Menu Items */}
             <nav className="flex-1 py-6">
                <ul className="space-y-1 px-3">
@@ -191,13 +249,15 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                         <Link
                            href={item.href}
                            onClick={() => {
+                              // Fecha o menu no mobile ao clicar
                               if (window.innerWidth < 1024) {
                                  onToggle();
                               }
                            }}
                            className={`
-                              flex items-center justify-center rounded-lg
+                              flex items-center rounded-lg
                               transition-all duration-200 group relative py-3
+                              ${shouldBeExpanded ? "space-x-3 px-3" : "justify-center"}
                               ${
                                  isActive(item.href)
                                     ? "bg-white/20 text-white"
@@ -206,10 +266,17 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                            `}
                         >
                            <span className="flex-shrink-0">{item.icon}</span>
-                           {/* Tooltip */}
-                           <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
-                              {item.label}
-                           </div>
+
+                           {shouldBeExpanded ? (
+                              <span className="font-medium text-sm">
+                                 {item.label}
+                              </span>
+                           ) : (
+                              // Tooltip quando colapsado (só desktop)
+                              <div className="hidden lg:block absolute left-full ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
+                                 {item.label}
+                              </div>
+                           )}
                         </Link>
                      </li>
                   ))}
