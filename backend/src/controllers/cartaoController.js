@@ -1,6 +1,5 @@
 const Cartao = require("../models/Cartao");
 const Bandeira = require("../models/Bandeira");
-const TipoPagamento = require("../models/TipoPagamento");
 
 class CartaoController {
    static async create(req, res) {
@@ -8,8 +7,8 @@ class CartaoController {
          const userId = req.userId;
          const {
             nome,
+            tipo,
             bandeira_id,
-            tipo_pagamento_id,
             limite_real,
             limite_pessoal,
             dia_fechamento,
@@ -17,10 +16,17 @@ class CartaoController {
             cor,
          } = req.body;
 
-         if (!nome || !bandeira_id || !tipo_pagamento_id) {
+         if (!nome || !tipo || !bandeira_id) {
             return res.status(400).json({
-               error: "Nome, bandeira e tipo de pagamento são obrigatórios",
+               error: "Nome, tipo e bandeira são obrigatórios",
             });
+         }
+
+         // Validar tipo
+         if (!["credito", "debito"].includes(tipo)) {
+            return res
+               .status(400)
+               .json({ error: "Tipo deve ser 'credito' ou 'debito'" });
          }
 
          // Validar bandeira
@@ -29,14 +35,6 @@ class CartaoController {
             return res
                .status(400)
                .json({ error: "Bandeira inválida ou inativa" });
-         }
-
-         // Validar tipo de pagamento
-         const tipoPagamento = await TipoPagamento.findById(tipo_pagamento_id);
-         if (!tipoPagamento || !tipoPagamento.ativa) {
-            return res
-               .status(400)
-               .json({ error: "Tipo de pagamento inválido ou inativo" });
          }
 
          // Validar dias (se fornecidos)
@@ -55,8 +53,8 @@ class CartaoController {
          const cartaoId = await Cartao.create(
             userId,
             nome,
+            tipo,
             bandeira_id,
-            tipo_pagamento_id,
             limite_real || null,
             limite_pessoal || null,
             dia_fechamento || null,
@@ -114,8 +112,8 @@ class CartaoController {
          const { id } = req.params;
          const {
             nome,
+            tipo,
             bandeira_id,
-            tipo_pagamento_id,
             limite_real,
             limite_pessoal,
             dia_fechamento,
@@ -128,10 +126,17 @@ class CartaoController {
             return res.status(404).json({ error: "Cartão não encontrado" });
          }
 
-         if (!nome || !bandeira_id || !tipo_pagamento_id) {
+         if (!nome || !tipo || !bandeira_id) {
             return res.status(400).json({
-               error: "Nome, bandeira e tipo de pagamento são obrigatórios",
+               error: "Nome, tipo e bandeira são obrigatórios",
             });
+         }
+
+         // Validar tipo
+         if (!["credito", "debito"].includes(tipo)) {
+            return res
+               .status(400)
+               .json({ error: "Tipo deve ser 'credito' ou 'debito'" });
          }
 
          // Validar bandeira
@@ -140,14 +145,6 @@ class CartaoController {
             return res
                .status(400)
                .json({ error: "Bandeira inválida ou inativa" });
-         }
-
-         // Validar tipo de pagamento
-         const tipoPagamento = await TipoPagamento.findById(tipo_pagamento_id);
-         if (!tipoPagamento || !tipoPagamento.ativa) {
-            return res
-               .status(400)
-               .json({ error: "Tipo de pagamento inválido ou inativo" });
          }
 
          // Validar dias (se fornecidos)
@@ -167,8 +164,8 @@ class CartaoController {
             id,
             userId,
             nome,
+            tipo,
             bandeira_id,
-            tipo_pagamento_id,
             limite_real || null,
             limite_pessoal || null,
             dia_fechamento || null,

@@ -4,8 +4,8 @@ class Cartao {
    static async create(
       userId,
       nome,
+      tipo,
       bandeiraId,
-      tipoPagamentoId,
       limiteReal,
       limitePessoal,
       diaFechamento,
@@ -14,13 +14,13 @@ class Cartao {
    ) {
       const [result] = await db.query(
          `INSERT INTO cartoes 
-         (user_id, nome, bandeira_id, tipo_pagamento_id, limite_real, limite_pessoal, dia_fechamento, dia_vencimento, cor, ativa) 
+         (user_id, nome, tipo, bandeira_id, limite_real, limite_pessoal, dia_fechamento, dia_vencimento, cor, ativa) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
          [
             userId,
             nome,
+            tipo,
             bandeiraId,
-            tipoPagamentoId,
             limiteReal,
             limitePessoal,
             diaFechamento,
@@ -35,11 +35,9 @@ class Cartao {
       let query = `
          SELECT 
             c.*, 
-            b.nome as bandeira_nome,
-            tp.nome as tipo_pagamento_nome
+            b.nome as bandeira_nome
          FROM cartoes c
          LEFT JOIN bandeiras b ON c.bandeira_id = b.id
-         LEFT JOIN tipos_pagamento tp ON c.tipo_pagamento_id = tp.id
          WHERE c.user_id = ?
       `;
 
@@ -57,11 +55,9 @@ class Cartao {
       const [rows] = await db.query(
          `SELECT 
             c.*, 
-            b.nome as bandeira_nome,
-            tp.nome as tipo_pagamento_nome
+            b.nome as bandeira_nome
          FROM cartoes c
          LEFT JOIN bandeiras b ON c.bandeira_id = b.id
-         LEFT JOIN tipos_pagamento tp ON c.tipo_pagamento_id = tp.id
          WHERE c.id = ? AND c.user_id = ?`,
          [id, userId],
       );
@@ -72,8 +68,8 @@ class Cartao {
       id,
       userId,
       nome,
+      tipo,
       bandeiraId,
-      tipoPagamentoId,
       limiteReal,
       limitePessoal,
       diaFechamento,
@@ -82,13 +78,13 @@ class Cartao {
    ) {
       await db.query(
          `UPDATE cartoes 
-         SET nome = ?, bandeira_id = ?, tipo_pagamento_id = ?, limite_real = ?, 
+         SET nome = ?, tipo = ?, bandeira_id = ?, limite_real = ?, 
              limite_pessoal = ?, dia_fechamento = ?, dia_vencimento = ?, cor = ?
          WHERE id = ? AND user_id = ?`,
          [
             nome,
+            tipo,
             bandeiraId,
-            tipoPagamentoId,
             limiteReal,
             limitePessoal,
             diaFechamento,

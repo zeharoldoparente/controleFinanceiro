@@ -23,21 +23,22 @@ router.use(authMiddleware);
  *             type: object
  *             required:
  *               - nome
+ *               - tipo
  *               - bandeira_id
- *               - tipo_pagamento_id
  *             properties:
  *               nome:
  *                 type: string
  *                 description: Nome do cartão
  *                 example: Nubank Roxinho
+ *               tipo:
+ *                 type: string
+ *                 enum: [credito, debito]
+ *                 description: Tipo do cartão
+ *                 example: credito
  *               bandeira_id:
  *                 type: integer
  *                 description: ID da bandeira
  *                 example: 2
- *               tipo_pagamento_id:
- *                 type: integer
- *                 description: ID do tipo de pagamento
- *                 example: 1
  *               limite_real:
  *                 type: number
  *                 description: Limite real do cartão (do banco)
@@ -61,19 +62,8 @@ router.use(authMiddleware);
  *     responses:
  *       201:
  *         description: Cartão criado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Cartão criado com sucesso!
- *                 cartaoId:
- *                   type: integer
- *                   example: 1
  *       400:
- *         description: Dados inválidos ou tipo inválido
+ *         description: Dados inválidos
  */
 router.post("/", CartaoController.create);
 
@@ -200,18 +190,19 @@ router.get("/:id", CartaoController.show);
  *             type: object
  *             required:
  *               - nome
+ *               - tipo
  *               - bandeira_id
- *               - tipo_pagamento_id
  *             properties:
  *               nome:
  *                 type: string
  *                 example: Nubank Roxinho
+ *               tipo:
+ *                 type: string
+ *                 enum: [credito, debito]
+ *                 example: credito
  *               bandeira_id:
  *                 type: integer
  *                 example: 2
- *               tipo_pagamento_id:
- *                 type: integer
- *                 example: 1
  *               limite_real:
  *                 type: number
  *                 example: 6000
