@@ -23,34 +23,41 @@ router.use(authMiddleware);
  *             type: object
  *             required:
  *               - nome
- *               - bandeira
- *               - dia_vencimento
- *               - tipo
+ *               - bandeira_id
+ *               - tipo_pagamento_id
  *             properties:
  *               nome:
  *                 type: string
- *                 description: Nome identificador do cartão
+ *                 description: Nome do cartão
  *                 example: Nubank Roxinho
- *               bandeira:
- *                 type: string
- *                 description: Bandeira do cartão
- *                 example: Mastercard
- *               limite:
+ *               bandeira_id:
+ *                 type: integer
+ *                 description: ID da bandeira
+ *                 example: 2
+ *               tipo_pagamento_id:
+ *                 type: integer
+ *                 description: ID do tipo de pagamento
+ *                 example: 1
+ *               limite_real:
  *                 type: number
- *                 format: float
- *                 description: Limite do cartão (opcional, geralmente para crédito)
- *                 example: 5000.00
+ *                 description: Limite real do cartão (do banco)
+ *                 example: 5000
+ *               limite_pessoal:
+ *                 type: number
+ *                 description: Limite pessoal (meta do usuário)
+ *                 example: 3000
+ *               dia_fechamento:
+ *                 type: integer
+ *                 description: Dia do fechamento da fatura (1-31)
+ *                 example: 8
  *               dia_vencimento:
  *                 type: integer
- *                 minimum: 1
- *                 maximum: 31
- *                 description: Dia do vencimento da fatura
+ *                 description: Dia do vencimento da fatura (1-31)
  *                 example: 15
- *               tipo:
+ *               cor:
  *                 type: string
- *                 enum: [credito, debito]
- *                 description: Tipo do cartão
- *                 example: credito
+ *                 description: Cor do cartão em hexadecimal
+ *                 example: "#8B5CF6"
  *     responses:
  *       201:
  *         description: Cartão criado com sucesso
@@ -79,6 +86,14 @@ router.post("/", CartaoController.create);
  *     tags: [Cartões]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: incluirInativas
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Incluir cartões inativos (opcional, padrão false)
+ *         example: true
  *     responses:
  *       200:
  *         description: Lista de cartões
@@ -101,18 +116,36 @@ router.post("/", CartaoController.create);
  *                       nome:
  *                         type: string
  *                         example: Nubank Roxinho
- *                       bandeira:
+ *                       bandeira_id:
+ *                         type: integer
+ *                         example: 2
+ *                       bandeira_nome:
  *                         type: string
  *                         example: Mastercard
- *                       limite:
+ *                       tipo_pagamento_id:
+ *                         type: integer
+ *                         example: 1
+ *                       tipo_pagamento_nome:
+ *                         type: string
+ *                         example: Cartão de Crédito
+ *                       limite_real:
  *                         type: number
- *                         example: 5000.00
+ *                         example: 5000
+ *                       limite_pessoal:
+ *                         type: number
+ *                         example: 3000
+ *                       dia_fechamento:
+ *                         type: integer
+ *                         example: 8
  *                       dia_vencimento:
  *                         type: integer
  *                         example: 15
- *                       tipo:
+ *                       cor:
  *                         type: string
- *                         example: credito
+ *                         example: "#8B5CF6"
+ *                       ativa:
+ *                         type: boolean
+ *                         example: true
  *                       created_at:
  *                         type: string
  *                         format: date-time
@@ -167,26 +200,33 @@ router.get("/:id", CartaoController.show);
  *             type: object
  *             required:
  *               - nome
- *               - bandeira
- *               - dia_vencimento
- *               - tipo
+ *               - bandeira_id
+ *               - tipo_pagamento_id
  *             properties:
  *               nome:
  *                 type: string
  *                 example: Nubank Roxinho
- *               bandeira:
- *                 type: string
- *                 example: Mastercard
- *               limite:
+ *               bandeira_id:
+ *                 type: integer
+ *                 example: 2
+ *               tipo_pagamento_id:
+ *                 type: integer
+ *                 example: 1
+ *               limite_real:
  *                 type: number
- *                 example: 6000.00
+ *                 example: 6000
+ *               limite_pessoal:
+ *                 type: number
+ *                 example: 4000
+ *               dia_fechamento:
+ *                 type: integer
+ *                 example: 8
  *               dia_vencimento:
  *                 type: integer
  *                 example: 15
- *               tipo:
+ *               cor:
  *                 type: string
- *                 enum: [credito, debito]
- *                 example: credito
+ *                 example: "#8B5CF6"
  *     responses:
  *       200:
  *         description: Cartão atualizado
@@ -195,10 +235,10 @@ router.put("/:id", CartaoController.update);
 
 /**
  * @swagger
- * /api/cartoes/{id}:
- *   delete:
- *     summary: Deletar cartão
- *     description: Remove um cartão do usuário
+ * /api/cartoes/{id}/reativar:
+ *   patch:
+ *     summary: Reativar cartão
+ *     description: Reativa um cartão que foi inativado
  *     tags: [Cartões]
  *     security:
  *       - bearerAuth: []
@@ -211,7 +251,33 @@ router.put("/:id", CartaoController.update);
  *         example: 1
  *     responses:
  *       200:
- *         description: Cartão deletado
+ *         description: Cartão reativado com sucesso
+ *       404:
+ *         description: Cartão não encontrado
+ */
+router.patch("/:id/reativar", CartaoController.reativar);
+
+/**
+ * @swagger
+ * /api/cartoes/{id}:
+ *   delete:
+ *     summary: Inativar cartão
+ *     description: Inativa um cartão (soft delete - não remove do banco)
+ *     tags: [Cartões]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Cartão inativado com sucesso
+ *       404:
+ *         description: Cartão não encontrado
  */
 router.delete("/:id", CartaoController.delete);
 
