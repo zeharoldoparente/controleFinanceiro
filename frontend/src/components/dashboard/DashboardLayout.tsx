@@ -19,18 +19,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="min-h-screen bg-gray-50">
          {/* Sidebar */}
          <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
-
-         {/* Main Content */}
-         <div
-            className={`transition-all duration-300 ${
-               sidebarOpen ? "lg:ml-64" : "lg:ml-20"
-            }`}
-         >
-            {/* Header */}
+         <div className="lg:ml-20">
             <Header onMenuToggle={toggleSidebar} sidebarOpen={sidebarOpen} />
-
-            {/* Page Content */}
-            <main className="pt-16">{children}</main>
+            <main className="pt-16 px-4 md:px-6">{children}</main>
          </div>
       </div>
    );

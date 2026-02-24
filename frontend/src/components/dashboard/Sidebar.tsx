@@ -1,9 +1,8 @@
 "use client";
 
-import Image from "next/image";
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 
 interface SidebarProps {
    isOpen: boolean;
@@ -154,9 +153,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
          href: "/dashboard/configuracoes",
       },
    ];
-
    const isActive = (href: string) => pathname === href;
-
    return (
       <>
          {/* Overlay para mobile */}
@@ -166,64 +163,26 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                onClick={onToggle}
             />
          )}
-
          {/* Sidebar */}
          <aside
             className={`
                fixed top-0 left-0 h-full bg-gradient-to-b from-[#035E3D] to-[#1E8449] 
                text-white shadow-2xl z-50 transition-all duration-300 ease-in-out
-               ${isOpen ? "w-64" : "w-20"}
+               ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+               w-20
             `}
          >
-            {/* Logo e Toggle */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
-               {isOpen ? (
-                  // Logo Expandida (com nome)
-                  <div className="flex items-center justify-center flex-1 pr-2">
-                     <Image
-                        src="/logo_nome_branco2.png"
-                        alt="ControlFin Logo"
-                        width={140}
-                        height={140}
-                        className="object-contain"
-                        priority
-                     />
-                  </div>
-               ) : (
-                  // Logo Colapsada (só símbolo)
-                  <div className="flex items-center justify-center w-full">
-                     <Image
-                        src="/logo_branco.png"
-                        alt="ControlFin"
-                        width={40}
-                        height={40}
-                        className="object-contain"
-                        priority
-                     />
-                  </div>
-               )}
-
-               {/* Botão Toggle */}
-               <button
-                  onClick={onToggle}
-                  className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${!isOpen && "hidden"}`}
-               >
-                  <svg
-                     className="w-5 h-5"
-                     fill="none"
-                     stroke="currentColor"
-                     viewBox="0 0 24 24"
-                  >
-                     <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                     />
-                  </svg>
-               </button>
+            {/* Logo */}
+            <div className="flex items-center justify-center p-4 border-b border-white/10">
+               <Image
+                  src="/logo_branco.png"
+                  alt="ControlFin"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  priority
+               />
             </div>
-
             {/* Menu Items */}
             <nav className="flex-1 py-6">
                <ul className="space-y-1 px-3">
@@ -231,58 +190,31 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                      <li key={item.href}>
                         <Link
                            href={item.href}
+                           onClick={() => {
+                              if (window.innerWidth < 1024) {
+                                 onToggle();
+                              }
+                           }}
                            className={`
-                  flex items-center rounded-lg
-                  transition-all duration-200 group relative
-                  ${isOpen ? "space-x-3 px-3 py-3" : "justify-center py-3"}
-                  ${
-                     isActive(item.href)
-                        ? "bg-white/20 text-white"
-                        : "text-white/80 hover:bg-white/10 hover:text-white"
-                  }
-               `}
+                              flex items-center justify-center rounded-lg
+                              transition-all duration-200 group relative py-3
+                              ${
+                                 isActive(item.href)
+                                    ? "bg-white/20 text-white"
+                                    : "text-white/80 hover:bg-white/10 hover:text-white"
+                              }
+                           `}
                         >
                            <span className="flex-shrink-0">{item.icon}</span>
-
-                           {isOpen ? (
-                              <span className="font-medium text-sm">
-                                 {item.label}
-                              </span>
-                           ) : (
-                              // Tooltip quando colapsado
-                              <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
-                                 {item.label}
-                              </div>
-                           )}
+                           {/* Tooltip */}
+                           <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
+                              {item.label}
+                           </div>
                         </Link>
                      </li>
                   ))}
                </ul>
             </nav>
-
-            {/* Botão Expandir (quando colapsado) */}
-            {!isOpen && (
-               <div className="p-4 border-t border-white/10">
-                  <button
-                     onClick={onToggle}
-                     className="w-full p-3 rounded-lg hover:bg-white/10 transition-colors"
-                  >
-                     <svg
-                        className="w-5 h-5 mx-auto"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                     >
-                        <path
-                           strokeLinecap="round"
-                           strokeLinejoin="round"
-                           strokeWidth={2}
-                           d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                        />
-                     </svg>
-                  </button>
-               </div>
-            )}
          </aside>
       </>
    );

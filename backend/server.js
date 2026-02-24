@@ -7,7 +7,33 @@ const swaggerSpec = require("./swagger");
 
 const app = express();
 
-app.use(cors());
+app.use(
+   cors({
+      origin: function (origin, callback) {
+         if (!origin) return callback(null, true);
+
+         const allowedOrigins = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3000$/,
+         ];
+
+         const isAllowed = allowedOrigins.some((pattern) => {
+            if (typeof pattern === "string") {
+               return pattern === origin;
+            }
+            return pattern.test(origin);
+         });
+
+         if (isAllowed) {
+            callback(null, true);
+         } else {
+            callback(new Error("Not allowed by CORS"));
+         }
+      },
+      credentials: true,
+   }),
+);
 app.use(express.json());
 app.use(
    "/api-docs",

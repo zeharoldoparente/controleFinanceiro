@@ -31,18 +31,18 @@ export default function DashboardPage() {
    return (
       <DashboardLayout>
          <div className="p-6">
-            {/* Conteúdo temporário para teste */}
-            <div className="space-y-6">
-               {/* Cards Principais */}
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Cards Principais */}
+            <div className="space-y-4">
+               {/* Receitas e Despesas - Lado a lado no mobile */}
+               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                   {/* Receitas */}
-                  <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
-                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-600">
+                  <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+                     <div className="flex items-center justify-between mb-3 md:mb-4">
+                        <h3 className="text-xs md:text-sm font-medium text-gray-600">
                            Receitas
                         </h3>
                         <svg
-                           className="w-6 h-6 text-green-600"
+                           className="w-5 h-5 md:w-6 md:h-6 text-green-600"
                            fill="none"
                            stroke="currentColor"
                            viewBox="0 0 24 24"
@@ -55,20 +55,22 @@ export default function DashboardPage() {
                            />
                         </svg>
                      </div>
-                     <p className="text-3xl font-bold text-green-600">
-                        R$ 5.000,00
+                     <p className="text-xl md:text-3xl font-bold text-green-600">
+                        R$ 5.000
                      </p>
-                     <p className="text-xs text-gray-500 mt-2">Este mês</p>
+                     <p className="text-[10px] md:text-xs text-gray-500 mt-1 md:mt-2">
+                        Este mês
+                     </p>
                   </div>
 
                   {/* Despesas */}
-                  <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
-                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-600">
+                  <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+                     <div className="flex items-center justify-between mb-3 md:mb-4">
+                        <h3 className="text-xs md:text-sm font-medium text-gray-600">
                            Despesas
                         </h3>
                         <svg
-                           className="w-6 h-6 text-red-600"
+                           className="w-5 h-5 md:w-6 md:h-6 text-red-600"
                            fill="none"
                            stroke="currentColor"
                            viewBox="0 0 24 24"
@@ -81,20 +83,22 @@ export default function DashboardPage() {
                            />
                         </svg>
                      </div>
-                     <p className="text-3xl font-bold text-red-600">
-                        R$ 3.200,00
+                     <p className="text-xl md:text-3xl font-bold text-red-600">
+                        R$ 3.200
                      </p>
-                     <p className="text-xs text-gray-500 mt-2">Este mês</p>
+                     <p className="text-[10px] md:text-xs text-gray-500 mt-1 md:mt-2">
+                        Este mês
+                     </p>
                   </div>
 
-                  {/* Saldo */}
-                  <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
-                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-600">
+                  {/* Saldo - Full width no mobile, 1/3 no desktop */}
+                  <div className="col-span-2 md:col-span-1 bg-white rounded-xl shadow-md p-4 md:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+                     <div className="flex items-center justify-between mb-3 md:mb-4">
+                        <h3 className="text-xs md:text-sm font-medium text-gray-600">
                            Saldo
                         </h3>
                         <svg
-                           className="w-6 h-6 text-gray-700"
+                           className="w-5 h-5 md:w-6 md:h-6 text-gray-700"
                            fill="none"
                            stroke="currentColor"
                            viewBox="0 0 24 24"
@@ -107,23 +111,42 @@ export default function DashboardPage() {
                            />
                         </svg>
                      </div>
-                     <p className="text-3xl font-bold text-gray-800">
-                        R$ 1.800,00
-                     </p>
-                     <p className="text-xs text-gray-500 mt-2">Positivo</p>
+                     {(() => {
+                        const receitas = 5000;
+                        const despesas = 3200;
+                        const saldo = receitas - despesas;
+                        const isPositivo = saldo >= 0;
+
+                        return (
+                           <>
+                              <p
+                                 className={`text-xl md:text-3xl font-bold ${isPositivo ? "text-blue-600" : "text-red-600"}`}
+                              >
+                                 R${" "}
+                                 {Math.abs(saldo).toLocaleString("pt-BR", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                 })}
+                              </p>
+                              <p className="text-[10px] md:text-xs text-gray-500 mt-1 md:mt-2">
+                                 {isPositivo ? "Positivo" : "Negativo"}
+                              </p>
+                           </>
+                        );
+                     })()}
                   </div>
                </div>
+            </div>
 
-               {/* Texto temporário */}
-               <div className="bg-white rounded-xl shadow-md p-8 border border-gray-100">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                     🚀 Dashboard em Construção
-                  </h3>
-                  <p className="text-gray-600">
-                     Testando o Header e Menu Lateral! Em breve adicionaremos os
-                     outros cards.
-                  </p>
-               </div>
+            {/* Texto temporário */}
+            <div className="bg-white rounded-xl shadow-md p-6 md:p-8 border border-gray-100 mt-4 md:mt-6">
+               <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+                  🚀 Dashboard em Construção
+               </h3>
+               <p className="text-sm md:text-base text-gray-600">
+                  Testando o Header e Menu Lateral! Em breve adicionaremos os
+                  outros cards.
+               </p>
             </div>
          </div>
       </DashboardLayout>
