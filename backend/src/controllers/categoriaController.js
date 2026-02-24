@@ -31,13 +31,19 @@ class CategoriaController {
 
    static async list(req, res) {
       try {
-         const { tipo } = req.query;
+         const { tipo, incluirInativas } = req.query;
 
          let categorias;
+
+         // Se incluirInativas for true, busca todas (ativas e inativas)
+         // Senão busca só ativas
          if (tipo) {
-            categorias = await Categoria.findByTipo(tipo);
+            categorias = await Categoria.findByTipo(
+               tipo,
+               incluirInativas === "true",
+            );
          } else {
-            categorias = await Categoria.findAll();
+            categorias = await Categoria.findAll(incluirInativas === "true");
          }
 
          res.json({ categorias });
@@ -94,12 +100,42 @@ class CategoriaController {
       try {
          const { id } = req.params;
 
-         await Categoria.delete(id);
+         const categoria = await Categoria.findById(id);
 
-         res.json({ message: "Categoria deletada com sucesso!" });
+         if (!categoria) {
+            return res
+               .status(404)
+               .json({ message: "Categoria não encontrada" });
+         }
+
+         // Soft delete - inativar
+         await Categoria.inativar(id);
+
+         res.json({ message: "Categoria inativada com sucesso" });
       } catch (error) {
          console.error(error);
-         res.status(500).json({ error: "Erro ao deletar categoria" });
+         res.status(500).json({ error: "Erro ao inativar categoria" });
+      }
+   }
+
+   static async reativar(req, res) {
+      try {
+         const { id } = req.params;
+
+         const categoria = await Categoria.findById(id);
+
+         if (!categoria) {
+            return res
+               .status(404)
+               .json({ message: "Categoria não encontrada" });
+         }
+
+         await Categoria.reativar(id);
+
+         res.json({ message: "Categoria reativada com sucesso" });
+      } catch (error) {
+         console.error(error);
+         res.status(500).json({ error: "Erro ao reativar categoria" });
       }
    }
 }

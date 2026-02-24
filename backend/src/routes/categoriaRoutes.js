@@ -70,6 +70,13 @@ router.post("/", CategoriaController.create);
  *           enum: [receita, despesa]
  *         description: Filtrar por tipo (opcional)
  *         example: despesa
+ *       - in: query
+ *         name: incluirInativas
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Incluir categorias inativas (opcional, padrão false)
+ *         example: true
  *     responses:
  *       200:
  *         description: Lista de categorias
@@ -92,6 +99,9 @@ router.post("/", CategoriaController.create);
  *                       tipo:
  *                         type: string
  *                         example: despesa
+ *                       ativa:
+ *                         type: boolean
+ *                         example: true
  *                       created_at:
  *                         type: string
  *                         format: date-time
@@ -163,10 +173,45 @@ router.put("/:id", CategoriaController.update);
 
 /**
  * @swagger
+ * /api/categorias/{id}/reativar:
+ *   patch:
+ *     summary: Reativar categoria
+ *     description: Reativa uma categoria que foi inativada anteriormente
+ *     tags: [Categorias]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da categoria a ser reativada
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Categoria reativada com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Categoria reativada com sucesso
+ *       404:
+ *         description: Categoria não encontrada
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.patch("/:id/reativar", CategoriaController.reativar);
+
+/**
+ * @swagger
  * /api/categorias/{id}:
  *   delete:
- *     summary: Deletar categoria
- *     description: Remove uma categoria do sistema
+ *     summary: Inativar categoria
+ *     description: Inativa uma categoria (soft delete - não remove do banco)
  *     tags: [Categorias]
  *     security:
  *       - bearerAuth: []
@@ -179,7 +224,17 @@ router.put("/:id", CategoriaController.update);
  *         example: 1
  *     responses:
  *       200:
- *         description: Categoria deletada
+ *         description: Categoria inativada com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Categoria inativada com sucesso
+ *       404:
+ *         description: Categoria não encontrada
  */
 router.delete("/:id", CategoriaController.delete);
 
