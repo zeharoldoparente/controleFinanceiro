@@ -52,7 +52,6 @@ db.getConnection()
    .catch((err) => console.error("❌ Erro ao conectar:", err));
 
 const authRoutes = require("./src/routes/authRoutes");
-const mesaRoutes = require("./src/routes/mesaRoutes");
 const categoriaRoutes = require("./src/routes/categoriaRoutes");
 const formaPagamentoRoutes = require("./src/routes/formaPagamentoRoutes");
 const cartaoRoutes = require("./src/routes/cartaoRoutes");
@@ -62,9 +61,9 @@ const conviteRoutes = require("./src/routes/conviteRoutes");
 const notificacaoRoutes = require("./src/routes/notificacaoRoutes");
 const bandeiraRoutes = require("./src/routes/bandeiraRoutes");
 const tipoPagamentoRoutes = require("./src/routes/tipoPagamentoRoutes");
+const mesaRoutes = require("./src/routes/mesaRoutes");
 
 app.use("/api/auth", authRoutes);
-app.use("/api/mesas", mesaRoutes);
 app.use("/api/categorias", categoriaRoutes);
 app.use("/api/formas-pagamento", formaPagamentoRoutes);
 app.use("/api/cartoes", cartaoRoutes);
@@ -74,6 +73,7 @@ app.use("/api/convites", conviteRoutes);
 app.use("/api/notificacoes", notificacaoRoutes);
 app.use("/api/bandeiras", bandeiraRoutes);
 app.use("/api/tipos-pagamento", tipoPagamentoRoutes);
+app.use("/api/mesa", mesaRoutes);
 
 app.get("/", (req, res) => {
    res.json({ message: "API do Controle Financeiro funcionando!" });

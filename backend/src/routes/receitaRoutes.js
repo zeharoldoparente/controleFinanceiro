@@ -49,20 +49,17 @@ router.use(authMiddleware);
  *                 type: integer
  *                 description: ID da categoria (opcional)
  *                 example: 2
+ *               tipo_pagamento_id:
+ *                 type: integer
+ *                 description: ID do tipo de pagamento (opcional)
+ *                 example: 3
+ *               recorrente:
+ *                 type: boolean
+ *                 description: Se a receita é recorrente
+ *                 example: false
  *     responses:
  *       201:
  *         description: Receita criada com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Receita criada com sucesso!
- *                 receitaId:
- *                   type: integer
- *                   example: 1
  *       400:
  *         description: Dados inválidos
  *       403:
@@ -87,48 +84,16 @@ router.post("/", ReceitaController.create);
  *           type: integer
  *         description: ID da mesa
  *         example: 2
+ *       - in: query
+ *         name: incluirInativas
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Incluir receitas inativas (opcional, padrão false)
+ *         example: true
  *     responses:
  *       200:
  *         description: Lista de receitas
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 receitas:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 1
- *                       mesa_id:
- *                         type: integer
- *                         example: 2
- *                       descricao:
- *                         type: string
- *                         example: Salário de Fevereiro
- *                       valor:
- *                         type: number
- *                         example: 5000.00
- *                       data_recebimento:
- *                         type: string
- *                         format: date
- *                         example: 2026-02-05
- *                       categoria_id:
- *                         type: integer
- *                         example: 2
- *                       categoria_nome:
- *                         type: string
- *                         example: Salário
- *                       created_at:
- *                         type: string
- *                         format: date-time
- *       400:
- *         description: ID da mesa não fornecido
- *       403:
- *         description: Sem acesso a esta mesa
  */
 router.get("/", ReceitaController.list);
 
@@ -206,6 +171,12 @@ router.get("/:id", ReceitaController.show);
  *               categoria_id:
  *                 type: integer
  *                 example: 2
+ *               tipo_pagamento_id:
+ *                 type: integer
+ *                 example: 3
+ *               recorrente:
+ *                 type: boolean
+ *                 example: false
  *     responses:
  *       200:
  *         description: Receita atualizada
@@ -214,10 +185,10 @@ router.put("/:id", ReceitaController.update);
 
 /**
  * @swagger
- * /api/receitas/{id}:
- *   delete:
- *     summary: Deletar receita
- *     description: Remove uma receita
+ * /api/receitas/{id}/reativar:
+ *   patch:
+ *     summary: Reativar receita
+ *     description: Reativa uma receita que foi inativada
  *     tags: [Receitas]
  *     security:
  *       - bearerAuth: []
@@ -236,8 +207,38 @@ router.put("/:id", ReceitaController.update);
  *         example: 2
  *     responses:
  *       200:
- *         description: Receita deletada
+ *         description: Receita reativada com sucesso
+ *       404:
+ *         description: Receita não encontrada
  */
-router.delete("/:id", ReceitaController.delete);
+router.patch("/:id/reativar", ReceitaController.reativar);
+
+/**
+ * @swagger
+ * /api/receitas/{id}:
+ *   delete:
+ *     summary: Inativar receita
+ *     description: Inativa uma receita (soft delete)
+ *     tags: [Receitas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Receita inativada com sucesso
+ */
+router.delete("/:id", ReceitaController.inativar);
 
 module.exports = router;

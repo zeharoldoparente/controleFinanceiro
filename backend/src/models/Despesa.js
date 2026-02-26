@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { v4: uuidv4 } = require("uuid");
 
 class Despesa {
    static async create(
@@ -7,69 +8,120 @@ class Despesa {
       valorProvisionado,
       dataVencimento,
       categoriaId,
-      formaPagamentoId,
+      tipoPagamentoId,
       cartaoId,
       recorrente,
       parcelas,
       parcelaAtual,
+      parcelaGrupoId,
    ) {
       const [result] = await db.query(
          `INSERT INTO despesas 
-      (mesa_id, descricao, valor_provisionado, data_vencimento, categoria_id, forma_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (mesa_id, descricao, valor_provisionado, data_vencimento, categoria_id, tipo_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual, parcela_grupo_id, ativa) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
          [
             mesaId,
             descricao,
             valorProvisionado,
             dataVencimento,
             categoriaId,
-            formaPagamentoId,
+            tipoPagamentoId,
             cartaoId,
-            recorrente,
-            parcelas,
-            parcelaAtual,
+            recorrente || false,
+            parcelas || 1,
+            parcelaAtual || 1,
+            parcelaGrupoId || uuidv4(),
          ],
       );
       return result.insertId;
    }
 
-   static async findByMesaId(mesaId) {
-      const [rows] = await db.query(
-         `
-      SELECT 
-        d.*,
-        c.nome as categoria_nome,
-        fp.nome as forma_pagamento_nome,
-        car.nome as cartao_nome
-      FROM despesas d
-      LEFT JOIN categorias c ON d.categoria_id = c.id
-      LEFT JOIN formas_pagamento fp ON d.forma_pagamento_id = fp.id
-      LEFT JOIN cartoes car ON d.cartao_id = car.id
-      WHERE d.mesa_id = ?
-      ORDER BY d.data_vencimento DESC
-    `,
-         [mesaId],
+   static async createMultiple(despesas) {
+      const values = despesas.map((d) => [
+         d.mesaId,
+         d.descricao,
+         d.valorProvisionado,
+         d.dataVencimento,
+         d.categoriaId,
+         d.tipoPagamentoId,
+         d.cartaoId,
+         d.recorrente || false,
+         d.parcelas || 1,
+         d.parcelaAtual,
+         d.parcelaGrupoId,
+         true,
+      ]);
+
+      const placeholders = values
+         .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+         .join(", ");
+      const flatValues = values.flat();
+
+      await db.query(
+         `INSERT INTO despesas 
+         (mesa_id, descricao, valor_provisionado, data_vencimento, categoria_id, tipo_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual, parcela_grupo_id, ativa) 
+         VALUES ${placeholders}`,
+         flatValues,
       );
+   }
+
+   static async findByMesaId(mesaId, incluirInativas = false) {
+      let query = `
+         SELECT 
+            d.*,
+            c.nome as categoria_nome,
+            tp.nome as tipo_pagamento_nome,
+            car.nome as cartao_nome
+         FROM despesas d
+         LEFT JOIN categorias c ON d.categoria_id = c.id
+         LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+         LEFT JOIN cartoes car ON d.cartao_id = car.id
+         WHERE d.mesa_id = ?
+      `;
+
+      if (!incluirInativas) {
+         query += " AND d.ativa = TRUE";
+      }
+
+      query += " ORDER BY d.data_vencimento DESC";
+
+      const [rows] = await db.query(query, [mesaId]);
       return rows;
    }
 
    static async findById(id, mesaId) {
       const [rows] = await db.query(
-         `
-      SELECT 
-        d.*,
-        c.nome as categoria_nome,
-        fp.nome as forma_pagamento_nome,
-        car.nome as cartao_nome
-      FROM despesas d
-      LEFT JOIN categorias c ON d.categoria_id = c.id
-      LEFT JOIN formas_pagamento fp ON d.forma_pagamento_id = fp.id
-      LEFT JOIN cartoes car ON d.cartao_id = car.id
-      WHERE d.id = ? AND d.mesa_id = ?
-    `,
+         `SELECT 
+            d.*,
+            c.nome as categoria_nome,
+            tp.nome as tipo_pagamento_nome,
+            car.nome as cartao_nome
+         FROM despesas d
+         LEFT JOIN categorias c ON d.categoria_id = c.id
+         LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+         LEFT JOIN cartoes car ON d.cartao_id = car.id
+         WHERE d.id = ? AND d.mesa_id = ?`,
          [id, mesaId],
       );
       return rows[0];
+   }
+
+   static async findByParcelaGrupo(parcelaGrupoId, mesaId) {
+      const [rows] = await db.query(
+         `SELECT 
+            d.*,
+            c.nome as categoria_nome,
+            tp.nome as tipo_pagamento_nome,
+            car.nome as cartao_nome
+         FROM despesas d
+         LEFT JOIN categorias c ON d.categoria_id = c.id
+         LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+         LEFT JOIN cartoes car ON d.cartao_id = car.id
+         WHERE d.parcela_grupo_id = ? AND d.mesa_id = ?
+         ORDER BY d.parcela_atual ASC`,
+         [parcelaGrupoId, mesaId],
+      );
+      return rows;
    }
 
    static async update(
@@ -79,26 +131,22 @@ class Despesa {
       valorProvisionado,
       dataVencimento,
       categoriaId,
-      formaPagamentoId,
+      tipoPagamentoId,
       cartaoId,
       recorrente,
-      parcelas,
-      parcelaAtual,
    ) {
       await db.query(
          `UPDATE despesas 
-      SET descricao = ?, valor_provisionado = ?, data_vencimento = ?, categoria_id = ?, forma_pagamento_id = ?, cartao_id = ?, recorrente = ?, parcelas = ?, parcela_atual = ?
-      WHERE id = ? AND mesa_id = ?`,
+         SET descricao = ?, valor_provisionado = ?, data_vencimento = ?, categoria_id = ?, tipo_pagamento_id = ?, cartao_id = ?, recorrente = ?
+         WHERE id = ? AND mesa_id = ?`,
          [
             descricao,
             valorProvisionado,
             dataVencimento,
             categoriaId,
-            formaPagamentoId,
+            tipoPagamentoId,
             cartaoId,
-            recorrente,
-            parcelas,
-            parcelaAtual,
+            recorrente || false,
             id,
             mesaId,
          ],
@@ -114,9 +162,30 @@ class Despesa {
    ) {
       await db.query(
          `UPDATE despesas 
-      SET paga = TRUE, valor_real = ?, data_pagamento = ?, comprovante = ?
-      WHERE id = ? AND mesa_id = ?`,
+         SET paga = TRUE, valor_real = ?, data_pagamento = ?, comprovante = ?
+         WHERE id = ? AND mesa_id = ?`,
          [valorReal, dataPagamento, comprovante, id, mesaId],
+      );
+   }
+
+   static async inativar(id, mesaId) {
+      await db.query(
+         "UPDATE despesas SET ativa = FALSE WHERE id = ? AND mesa_id = ?",
+         [id, mesaId],
+      );
+   }
+
+   static async inativarGrupo(parcelaGrupoId, mesaId) {
+      await db.query(
+         "UPDATE despesas SET ativa = FALSE WHERE parcela_grupo_id = ? AND mesa_id = ?",
+         [parcelaGrupoId, mesaId],
+      );
+   }
+
+   static async reativar(id, mesaId) {
+      await db.query(
+         "UPDATE despesas SET ativa = TRUE WHERE id = ? AND mesa_id = ?",
+         [id, mesaId],
       );
    }
 

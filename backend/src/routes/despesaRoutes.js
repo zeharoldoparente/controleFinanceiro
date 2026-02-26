@@ -12,7 +12,7 @@ router.use(authMiddleware);
  * /api/despesas:
  *   post:
  *     summary: Criar despesa
- *     description: Cadastra uma nova despesa em uma mesa
+ *     description: Cadastra uma nova despesa em uma mesa. Se parcelas > 1, cria automaticamente todas as parcelas.
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -35,44 +35,40 @@ router.use(authMiddleware);
  *               descricao:
  *                 type: string
  *                 description: Descrição da despesa
- *                 example: Conta de Luz
+ *                 example: Notebook Dell
  *               valor_provisionado:
  *                 type: number
  *                 format: float
- *                 description: Valor estimado da despesa
- *                 example: 150.00
+ *                 description: Valor total da despesa
+ *                 example: 3000.00
  *               data_vencimento:
  *                 type: string
  *                 format: date
- *                 description: Data de vencimento
- *                 example: 2026-02-15
+ *                 description: Data de vencimento (primeira parcela se parcelado)
+ *                 example: 2026-03-10
  *               categoria_id:
  *                 type: integer
  *                 description: ID da categoria (opcional)
  *                 example: 1
- *               forma_pagamento_id:
+ *               tipo_pagamento_id:
  *                 type: integer
- *                 description: ID da forma de pagamento (opcional)
+ *                 description: ID do tipo de pagamento (opcional)
  *                 example: 1
  *               cartao_id:
  *                 type: integer
- *                 description: ID do cartão (opcional)
+ *                 description: ID do cartão (obrigatório se tipo for Cartão)
  *                 example: 1
  *               recorrente:
  *                 type: boolean
  *                 description: Se a despesa é recorrente
- *                 example: true
+ *                 example: false
  *               parcelas:
  *                 type: integer
- *                 description: Número de parcelas (opcional)
+ *                 description: Número de parcelas (divide automaticamente)
  *                 example: 3
- *               parcela_atual:
- *                 type: integer
- *                 description: Parcela atual (opcional)
- *                 example: 1
  *     responses:
  *       201:
- *         description: Despesa criada com sucesso
+ *         description: Despesa(s) criada(s) com sucesso
  *       400:
  *         description: Dados inválidos
  *       403:
@@ -97,55 +93,16 @@ router.post("/", DespesaController.create);
  *           type: integer
  *         description: ID da mesa
  *         example: 2
+ *       - in: query
+ *         name: incluirInativas
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Incluir despesas inativas (opcional, padrão false)
+ *         example: true
  *     responses:
  *       200:
  *         description: Lista de despesas
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 despesas:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 1
- *                       mesa_id:
- *                         type: integer
- *                         example: 2
- *                       descricao:
- *                         type: string
- *                         example: Conta de Luz
- *                       valor_provisionado:
- *                         type: number
- *                         example: 150.00
- *                       valor_real:
- *                         type: number
- *                         example: 148.50
- *                       data_vencimento:
- *                         type: string
- *                         format: date
- *                       paga:
- *                         type: boolean
- *                         example: true
- *                       data_pagamento:
- *                         type: string
- *                         format: date
- *                       comprovante:
- *                         type: string
- *                         example: c1c3702d204b0a7b16cd7a709e681cff.jpeg
- *                       categoria_nome:
- *                         type: string
- *                         example: Alimentação
- *                       forma_pagamento_nome:
- *                         type: string
- *                         example: PIX
- *                       cartao_nome:
- *                         type: string
- *                         example: Nubank Roxinho
  */
 router.get("/", DespesaController.list);
 
@@ -181,10 +138,39 @@ router.get("/:id", DespesaController.show);
 
 /**
  * @swagger
+ * /api/despesas/grupo/{parcela_grupo_id}:
+ *   get:
+ *     summary: Buscar todas as parcelas de um grupo
+ *     description: Retorna todas as parcelas vinculadas a um parcela_grupo_id
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: parcela_grupo_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: UUID do grupo de parcelas
+ *         example: 550e8400-e29b-41d4-a716-446655440000
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Lista de parcelas do grupo
+ */
+router.get("/grupo/:parcela_grupo_id", DespesaController.getByParcelaGrupo);
+
+/**
+ * @swagger
  * /api/despesas/{id}:
  *   put:
  *     summary: Atualizar despesa
- *     description: Atualiza informações de uma despesa
+ *     description: Atualiza informações de uma despesa (não altera parcelamento)
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -223,7 +209,7 @@ router.get("/:id", DespesaController.show);
  *               categoria_id:
  *                 type: integer
  *                 example: 1
- *               forma_pagamento_id:
+ *               tipo_pagamento_id:
  *                 type: integer
  *                 example: 1
  *               cartao_id:
@@ -232,12 +218,6 @@ router.get("/:id", DespesaController.show);
  *               recorrente:
  *                 type: boolean
  *                 example: true
- *               parcelas:
- *                 type: integer
- *                 example: 3
- *               parcela_atual:
- *                 type: integer
- *                 example: 1
  *     responses:
  *       200:
  *         description: Despesa atualizada
@@ -259,7 +239,6 @@ router.put("/:id", DespesaController.update);
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID da despesa
  *         example: 1
  *     requestBody:
  *       required: true
@@ -273,41 +252,84 @@ router.put("/:id", DespesaController.update);
  *             properties:
  *               mesa_id:
  *                 type: integer
- *                 description: ID da mesa
  *                 example: 2
  *               valor_real:
  *                 type: number
- *                 format: float
- *                 description: Valor real pago (se diferente do provisionado)
  *                 example: 148.50
  *               data_pagamento:
  *                 type: string
  *                 format: date
- *                 description: Data do pagamento
  *                 example: 2026-02-14
  *               comprovante:
  *                 type: string
  *                 format: binary
- *                 description: Arquivo de imagem do comprovante (opcional)
  *     responses:
  *       200:
  *         description: Despesa marcada como paga
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Despesa marcada como paga!
- *                 comprovante:
- *                   type: string
- *                   example: c1c3702d204b0a7b16cd7a709e681cff.jpeg
  */
 router.patch(
    "/:id/pagar",
    upload.single("comprovante"),
    DespesaController.marcarComoPaga,
+);
+
+/**
+ * @swagger
+ * /api/despesas/{id}/reativar:
+ *   patch:
+ *     summary: Reativar despesa
+ *     description: Reativa uma despesa que foi inativada
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Despesa reativada com sucesso
+ */
+router.patch("/:id/reativar", DespesaController.reativar);
+
+/**
+ * @swagger
+ * /api/despesas/grupo/{parcela_grupo_id}/inativar:
+ *   patch:
+ *     summary: Inativar todas as parcelas de um grupo
+ *     description: Inativa todas as despesas vinculadas a um parcela_grupo_id
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: parcela_grupo_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: 550e8400-e29b-41d4-a716-446655440000
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Todas as parcelas foram inativadas
+ */
+router.patch(
+   "/grupo/:parcela_grupo_id/inativar",
+   DespesaController.inativarGrupo,
 );
 
 /**
@@ -338,26 +360,13 @@ router.patch(
  *             properties:
  *               mesa_id:
  *                 type: integer
- *                 description: ID da mesa
  *                 example: 2
  *               comprovante:
  *                 type: string
  *                 format: binary
- *                 description: Arquivo de imagem do comprovante
  *     responses:
  *       200:
  *         description: Comprovante atualizado
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Comprovante atualizado com sucesso!
- *                 comprovante:
- *                   type: string
- *                   example: a1b2c3d4e5f6g7h8.jpeg
  */
 router.post(
    "/:id/comprovante",
@@ -390,13 +399,6 @@ router.post(
  *     responses:
  *       200:
  *         description: Arquivo do comprovante
- *         content:
- *           image/jpeg:
- *             schema:
- *               type: string
- *               format: binary
- *       404:
- *         description: Comprovante não encontrado
  */
 router.get("/:id/comprovante/download", DespesaController.getComprovante);
 
@@ -432,8 +434,8 @@ router.delete("/:id/comprovante", DespesaController.deleteComprovante);
  * @swagger
  * /api/despesas/{id}:
  *   delete:
- *     summary: Deletar despesa
- *     description: Remove uma despesa e seu comprovante (se houver)
+ *     summary: Inativar despesa
+ *     description: Inativa uma despesa (soft delete)
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -452,8 +454,8 @@ router.delete("/:id/comprovante", DespesaController.deleteComprovante);
  *         example: 2
  *     responses:
  *       200:
- *         description: Despesa deletada
+ *         description: Despesa inativada com sucesso
  */
-router.delete("/:id", DespesaController.delete);
+router.delete("/:id", DespesaController.inativar);
 
 module.exports = router;
