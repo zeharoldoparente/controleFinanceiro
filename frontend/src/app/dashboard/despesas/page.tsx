@@ -1506,10 +1506,21 @@ export default function DespesasPage() {
                                     <select
                                        value={tipoPagamentoId}
                                        onChange={(e) => {
-                                          setTipoPagamentoId(
-                                             Number(e.target.value),
-                                          );
+                                          const newId = Number(e.target.value);
+                                          setTipoPagamentoId(newId);
                                           setCartaoId(""); // limpa cartão ao trocar tipo
+                                          // Se não for mais crédito, reseta parcelas
+                                          const tp = tiposPagamento.find(
+                                             (t) => t.id === newId,
+                                          );
+                                          const nome =
+                                             tp?.nome?.toLowerCase() ?? "";
+                                          if (
+                                             !nome.includes("crédito") &&
+                                             !nome.includes("credito")
+                                          ) {
+                                             setParcelas(1);
+                                          }
                                        }}
                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                     >
@@ -1559,7 +1570,7 @@ export default function DespesasPage() {
                                                 : "débito"}{" "}
                                              cadastrado.{" "}
                                              <a
-                                                href="./cartoes"
+                                                href="/dashboard/cartoes"
                                                 className="text-red-600 font-medium hover:underline"
                                              >
                                                 Cadastrar agora →
@@ -1615,56 +1626,58 @@ export default function DespesasPage() {
                                  </div>
                               )}
 
-                              {/* Parcelamento — só variável com cartão de crédito, ou variável sem cartão */}
-                              {tipo === "variavel" && !editando && (
-                                 <div
-                                    className={`flex items-center gap-3 p-3 rounded-lg ${
-                                       isCartaoCredito
-                                          ? "bg-purple-50 border border-purple-200"
-                                          : "bg-gray-50"
-                                    }`}
-                                 >
-                                    <svg
-                                       className="w-4 h-4 text-gray-500 shrink-0"
-                                       fill="none"
-                                       stroke="currentColor"
-                                       viewBox="0 0 24 24"
+                              {/* Parcelamento — só variável com cartão de crédito selecionado */}
+                              {tipo === "variavel" &&
+                                 isCartaoCredito &&
+                                 !editando && (
+                                    <div
+                                       className={`flex items-center gap-3 p-3 rounded-lg ${
+                                          isCartaoCredito
+                                             ? "bg-purple-50 border border-purple-200"
+                                             : "bg-gray-50"
+                                       }`}
                                     >
-                                       <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                                       <svg
+                                          className="w-4 h-4 text-gray-500 shrink-0"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                       >
+                                          <path
+                                             strokeLinecap="round"
+                                             strokeLinejoin="round"
+                                             strokeWidth={2}
+                                             d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                                          />
+                                       </svg>
+                                       <label className="text-sm text-gray-700 whitespace-nowrap">
+                                          Parcelar em
+                                       </label>
+                                       <input
+                                          type="number"
+                                          min={1}
+                                          max={60}
+                                          value={parcelas}
+                                          onChange={(e) =>
+                                             setParcelas(
+                                                Math.max(
+                                                   1,
+                                                   Number(e.target.value),
+                                                ),
+                                             )
+                                          }
+                                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-red-500"
                                        />
-                                    </svg>
-                                    <label className="text-sm text-gray-700 whitespace-nowrap">
-                                       Parcelar em
-                                    </label>
-                                    <input
-                                       type="number"
-                                       min={1}
-                                       max={60}
-                                       value={parcelas}
-                                       onChange={(e) =>
-                                          setParcelas(
-                                             Math.max(
-                                                1,
-                                                Number(e.target.value),
-                                             ),
-                                          )
-                                       }
-                                       className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-red-500"
-                                    />
-                                    <span className="text-sm text-gray-500">
-                                       vez{parcelas > 1 ? "es" : ""}
-                                    </span>
-                                    {parcelas > 1 && isCartaoCredito && (
-                                       <span className="text-xs text-purple-600 font-medium">
-                                          1 lançamento por mês no cartão
+                                       <span className="text-sm text-gray-500">
+                                          vez{parcelas > 1 ? "es" : ""}
                                        </span>
-                                    )}
-                                 </div>
-                              )}
+                                       {parcelas > 1 && isCartaoCredito && (
+                                          <span className="text-xs text-purple-600 font-medium">
+                                             1 lançamento por mês no cartão
+                                          </span>
+                                       )}
+                                    </div>
+                                 )}
 
                               {/* Recorrente — só variável E sem parcelamento no crédito */}
                               {tipo === "variavel" &&
