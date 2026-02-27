@@ -76,10 +76,11 @@ class ConviteController {
             );
 
             try {
-               await EmailService.enviarEmailConviteExistente(
-                  email_convidado,
-                  userInfo.nome,
+               await emailService.enviarEmailConviteExistente(
+                  email,
+                  nomeQuemConvidou,
                   nomeMesa,
+                  nomeConvidado,
                   token,
                );
             } catch (emailError) {

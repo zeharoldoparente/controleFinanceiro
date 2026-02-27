@@ -1,7 +1,6 @@
 const db = require("../config/database");
 const Mesa = require("../models/Mesa");
 
-// ─── Helper: mês atual ────────────────────────────────────────────────────────
 function mesAtual() {
    const d = new Date();
    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -38,8 +37,8 @@ class DashboardController {
          const mesaIds = mesas.map((m) => m.id);
          const ph = mesaIds.map(() => "?").join(",");
 
-         // ── 2. Resumo receitas do mês ────────────────────────────────────────
-         // Confirmadas: status='recebida' com data no mês
+         // ── 2. Receitas confirmadas do mês ───────────────────────────────────
+         // status = 'recebida' (campo adicionado na migration v2)
          const [[receitasConfirmadas]] = await db.query(
             `SELECT
                COALESCE(SUM(COALESCE(valor_real, valor)), 0) AS confirmado,
@@ -52,9 +51,9 @@ class DashboardController {
             [...mesaIds, mesFiltro],
          );
 
-         // A receber: normais do mês ainda pendentes
+         // Receitas normais a receber no mês
          const [[receitasPendentes]] = await db.query(
-            `SELECT COALESCE(SUM(valor), 0) AS pendente, COUNT(*) AS qtd_pendentes
+            `SELECT COALESCE(SUM(valor), 0) AS pendente
              FROM receitas
              WHERE mesa_id IN (${ph})
                AND status = 'a_receber'
@@ -64,7 +63,7 @@ class DashboardController {
             [...mesaIds, mesFiltro],
          );
 
-         // Recorrentes a receber (sem confirmação no mês)
+         // Recorrentes sem confirmação no mês
          const [[receitasRecorrentes]] = await db.query(
             `SELECT COALESCE(SUM(r.valor), 0) AS pendente_recorrente
              FROM receitas r
@@ -86,136 +85,162 @@ class DashboardController {
             parseFloat(receitasPendentes.pendente) +
             parseFloat(receitasRecorrentes.pendente_recorrente);
 
-         // ── 3. Resumo despesas do mês ────────────────────────────────────────
+         // ── 3. Despesas pagas do mês ─────────────────────────────────────────
+         // Despesas usam campo `paga` (boolean) + `valor_provisionado` + `valor_real`
          const [[despesasPagas]] = await db.query(
             `SELECT
-               COALESCE(SUM(COALESCE(valor_pago, valor)), 0) AS pago,
+               COALESCE(SUM(COALESCE(valor_real, valor_provisionado)), 0) AS pago,
                COUNT(*) AS qtd_pagas
              FROM despesas
              WHERE mesa_id IN (${ph})
-               AND status = 'paga'
+               AND paga = TRUE
                AND ativa = TRUE
                AND data_cancelamento IS NULL
                AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?`,
             [...mesaIds, mesFiltro],
          );
 
+         // Despesas não pagas no mês (normais + recorrentes)
          const [[despesasPendentes]] = await db.query(
             `SELECT
-               COALESCE(SUM(valor), 0) AS pendente,
+               COALESCE(SUM(valor_provisionado), 0) AS pendente,
                COUNT(*) AS qtd_pendentes
              FROM despesas
              WHERE mesa_id IN (${ph})
-               AND status IN ('pendente', 'vencida')
+               AND paga = FALSE
                AND ativa = TRUE
-               AND data_cancelamento IS NULL
-               AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?`,
-            [...mesaIds, mesFiltro],
+               AND (
+                  (recorrente = FALSE AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?)
+                  OR
+                  (
+                     recorrente = TRUE
+                     AND data_vencimento <= LAST_DAY(?)
+                     AND (data_cancelamento IS NULL OR DATE_FORMAT(data_cancelamento, '%Y-%m') > ?)
+                  )
+               )`,
+            [...mesaIds, mesFiltro, primeiroDia, mesFiltro],
          );
 
          const despesasProvisionado =
             parseFloat(despesasPagas.pago) +
             parseFloat(despesasPendentes.pendente);
 
-         // ── 4. Alertas: despesas vencidas e em atraso ────────────────────────
+         // ── 4. Alertas: despesas vencidas (não pagas com data passada) ───────
          const [despesasVencidas] = await db.query(
-            `SELECT d.id, d.descricao, d.valor, d.data_vencimento,
+            `SELECT d.id, d.descricao, d.valor_provisionado AS valor, d.data_vencimento,
                     m.nome AS mesa_nome, c.nome AS categoria_nome
              FROM despesas d
              LEFT JOIN mesas m ON d.mesa_id = m.id
              LEFT JOIN categorias c ON d.categoria_id = c.id
              WHERE d.mesa_id IN (${ph})
-               AND d.status = 'vencida'
+               AND d.paga = FALSE
                AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
+               AND d.data_vencimento < ?
+               AND (d.recorrente = FALSE OR (d.recorrente = TRUE AND DATE_FORMAT(d.data_vencimento, '%Y-%m') <= ?))
              ORDER BY d.data_vencimento ASC
              LIMIT 5`,
-            [...mesaIds],
+            [...mesaIds, hoje, mesFiltro],
          );
 
+         // Despesas que vencem hoje
          const [despesasHoje] = await db.query(
-            `SELECT d.id, d.descricao, d.valor, d.data_vencimento,
+            `SELECT d.id, d.descricao, d.valor_provisionado AS valor, d.data_vencimento,
                     m.nome AS mesa_nome
              FROM despesas d
              LEFT JOIN mesas m ON d.mesa_id = m.id
              WHERE d.mesa_id IN (${ph})
-               AND d.status = 'pendente'
+               AND d.paga = FALSE
                AND d.data_vencimento = ?
                AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
-             ORDER BY d.valor DESC
+             ORDER BY d.valor_provisionado DESC
              LIMIT 5`,
             [...mesaIds, hoje],
          );
 
          // ── 5. Cartões: limite vs gasto ──────────────────────────────────────
+         // Cartões pertencem ao user_id, mas as despesas são filtradas pelas mesas do usuário
          const [cartoes] = await db.query(
             `SELECT
-               ca.id, ca.nome, ca.tipo, ca.limite, ca.cor,
+               ca.id, ca.nome, ca.tipo,
+               ca.limite_real, ca.limite_pessoal, ca.cor,
                b.nome AS bandeira_nome,
-               m.nome AS mesa_nome,
                COALESCE((
-                  SELECT SUM(COALESCE(d.valor_pago, d.valor))
+                  SELECT SUM(COALESCE(d.valor_real, d.valor_provisionado))
                   FROM despesas d
                   WHERE d.cartao_id = ca.id
-                    AND d.status = 'paga'
+                    AND d.paga = TRUE
                     AND d.ativa = TRUE
                     AND d.data_cancelamento IS NULL
                     AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
                ), 0) AS gasto_mes,
                COALESCE((
-                  SELECT SUM(d.valor)
+                  SELECT SUM(d.valor_provisionado)
                   FROM despesas d
                   WHERE d.cartao_id = ca.id
-                    AND d.status IN ('pendente','vencida')
+                    AND d.paga = FALSE
                     AND d.ativa = TRUE
                     AND d.data_cancelamento IS NULL
                     AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
                ), 0) AS pendente_mes
              FROM cartoes ca
              LEFT JOIN bandeiras b ON ca.bandeira_id = b.id
-             LEFT JOIN mesas m ON ca.mesa_id = m.id
-             WHERE ca.mesa_id IN (${ph})
-               AND ca.ativo = TRUE
-             ORDER BY ca.limite DESC`,
-            [mesFiltro, mesFiltro, ...mesaIds],
+             WHERE ca.user_id = ?
+               AND ca.ativa = TRUE
+             ORDER BY ca.limite_pessoal DESC`,
+            [mesFiltro, mesFiltro, userId],
          );
 
-         // Alerta de cartão próximo do limite
          const cartoesCriticos = cartoes.filter((c) => {
-            if (!c.limite || c.tipo !== "credito") return false;
+            const limite = parseFloat(c.limite_pessoal || c.limite_real || 0);
+            if (!limite || c.tipo !== "credito") return false;
             const usado = parseFloat(c.gasto_mes) + parseFloat(c.pendente_mes);
-            return usado / parseFloat(c.limite) >= 0.8;
+            return usado / limite >= 0.8;
          });
 
-         // ── 6. Maiores gastos por categoria (top 6) ──────────────────────────
+         // ── 6. Maiores gastos por categoria ──────────────────────────────────
          const [gastosPorCategoria] = await db.query(
             `SELECT
                COALESCE(c.nome, 'Sem categoria') AS categoria,
-               c.cor,
-               SUM(COALESCE(d.valor_pago, d.valor)) AS total
+               SUM(COALESCE(d.valor_real, d.valor_provisionado)) AS total
              FROM despesas d
              LEFT JOIN categorias c ON d.categoria_id = c.id
              WHERE d.mesa_id IN (${ph})
-               AND d.status = 'paga'
+               AND d.paga = TRUE
                AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
                AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
-             GROUP BY d.categoria_id, c.nome, c.cor
+             GROUP BY d.categoria_id, c.nome
              ORDER BY total DESC
              LIMIT 6`,
             [...mesaIds, mesFiltro],
          );
 
-         // ── 7. Evolução mensal (últimos 6 meses) ─────────────────────────────
+         // ── 7. Evolução dos últimos 6 meses ──────────────────────────────────
          const meses6 = [];
-         const d = new Date();
+         const dNow = new Date();
          for (let i = 5; i >= 0; i--) {
-            const dd = new Date(d.getFullYear(), d.getMonth() - i, 1);
+            const dd = new Date(dNow.getFullYear(), dNow.getMonth() - i, 1);
             meses6.push(
                `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}`,
             );
          }
+
+         const nomesMes = [
+            "Jan",
+            "Fev",
+            "Mar",
+            "Abr",
+            "Mai",
+            "Jun",
+            "Jul",
+            "Ago",
+            "Set",
+            "Out",
+            "Nov",
+            "Dez",
+         ];
 
          const evolucao = await Promise.all(
             meses6.map(async (m) => {
@@ -227,31 +252,17 @@ class DashboardController {
                   [...mesaIds, m],
                );
                const [[desp]] = await db.query(
-                  `SELECT COALESCE(SUM(COALESCE(valor_pago, valor)), 0) AS total
+                  `SELECT COALESCE(SUM(COALESCE(valor_real, valor_provisionado)), 0) AS total
                    FROM despesas
-                   WHERE mesa_id IN (${ph}) AND status = 'paga' AND ativa = TRUE
+                   WHERE mesa_id IN (${ph}) AND paga = TRUE AND ativa = TRUE
                      AND data_cancelamento IS NULL
                      AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?`,
                   [...mesaIds, m],
                );
-               const nomes = [
-                  "Jan",
-                  "Fev",
-                  "Mar",
-                  "Abr",
-                  "Mai",
-                  "Jun",
-                  "Jul",
-                  "Ago",
-                  "Set",
-                  "Out",
-                  "Nov",
-                  "Dez",
-               ];
                const [ano, mesNum] = m.split("-");
                return {
                   mes: m,
-                  label: `${nomes[parseInt(mesNum) - 1]}/${ano.slice(2)}`,
+                  label: `${nomesMes[parseInt(mesNum) - 1]}/${ano.slice(2)}`,
                   receitas: parseFloat(rec.total),
                   despesas: parseFloat(desp.total),
                   saldo: parseFloat(rec.total) - parseFloat(desp.total),
@@ -259,40 +270,34 @@ class DashboardController {
             }),
          );
 
-         // ── 8. Fluxo de caixa do mês (acumulado por semana) ──────────────────
-         // Agrupa por semana para simplificar e evitar muitos pontos no gráfico
+         // ── 8. Fluxo de caixa diário do mês ──────────────────────────────────
          const [fluxoReceitas] = await db.query(
-            `SELECT
-               WEEK(data_recebimento) AS semana,
-               DAYOFWEEK(data_recebimento) AS dia_semana,
-               DAY(data_recebimento) AS dia,
-               SUM(COALESCE(valor_real, valor)) AS total
+            `SELECT DAY(data_recebimento) AS dia,
+                    SUM(COALESCE(valor_real, valor)) AS total
              FROM receitas
              WHERE mesa_id IN (${ph})
                AND status = 'recebida'
                AND ativa = TRUE
                AND DATE_FORMAT(data_recebimento, '%Y-%m') = ?
              GROUP BY DAY(data_recebimento)
-             ORDER BY data_recebimento`,
+             ORDER BY dia`,
             [...mesaIds, mesFiltro],
          );
 
          const [fluxoDespesas] = await db.query(
-            `SELECT
-               DAY(data_vencimento) AS dia,
-               SUM(COALESCE(valor_pago, valor)) AS total
+            `SELECT DAY(data_vencimento) AS dia,
+                    SUM(COALESCE(valor_real, valor_provisionado)) AS total
              FROM despesas
              WHERE mesa_id IN (${ph})
-               AND status = 'paga'
+               AND paga = TRUE
                AND ativa = TRUE
                AND data_cancelamento IS NULL
                AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?
              GROUP BY DAY(data_vencimento)
-             ORDER BY data_vencimento`,
+             ORDER BY dia`,
             [...mesaIds, mesFiltro],
          );
 
-         // Monta fluxo acumulado por dia
          const diasNoMes = new Date(
             parseInt(mesFiltro.split("-")[0]),
             parseInt(mesFiltro.split("-")[1]),
@@ -312,7 +317,7 @@ class DashboardController {
             acumulado += (recMap[dia] || 0) - (despMap[dia] || 0);
             fluxo.push({
                dia,
-               label: `${String(dia).padStart(2, "0")}`,
+               label: String(dia).padStart(2, "0"),
                receitas: recMap[dia] || 0,
                despesas: despMap[dia] || 0,
                saldo_acumulado: acumulado,
@@ -322,8 +327,10 @@ class DashboardController {
          // ── 9. Últimas movimentações ──────────────────────────────────────────
          const [ultimasReceitas] = await db.query(
             `SELECT
-               r.id, 'receita' AS tipo, r.descricao, r.data_recebimento AS data,
-               COALESCE(r.valor_real, r.valor) AS valor, r.status,
+               r.id, 'receita' AS tipo, r.descricao,
+               r.data_recebimento AS data,
+               COALESCE(r.valor_real, r.valor) AS valor,
+               r.status,
                c.nome AS categoria_nome, m.nome AS mesa_nome
              FROM receitas r
              LEFT JOIN categorias c ON r.categoria_id = c.id
@@ -338,14 +345,16 @@ class DashboardController {
 
          const [ultimasDespesas] = await db.query(
             `SELECT
-               d.id, 'despesa' AS tipo, d.descricao, d.data_pagamento AS data,
-               COALESCE(d.valor_pago, d.valor) AS valor, d.status,
+               d.id, 'despesa' AS tipo, d.descricao,
+               d.data_pagamento AS data,
+               COALESCE(d.valor_real, d.valor_provisionado) AS valor,
+               IF(d.paga, 'paga', 'pendente') AS status,
                c.nome AS categoria_nome, m.nome AS mesa_nome
              FROM despesas d
              LEFT JOIN categorias c ON d.categoria_id = c.id
              LEFT JOIN mesas m ON d.mesa_id = m.id
              WHERE d.mesa_id IN (${ph})
-               AND d.status = 'paga'
+               AND d.paga = TRUE
                AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
              ORDER BY d.data_pagamento DESC
@@ -354,6 +363,7 @@ class DashboardController {
          );
 
          const ultimasMovimentacoes = [...ultimasReceitas, ...ultimasDespesas]
+            .filter((m) => m.data)
             .sort((a, b) => new Date(b.data) - new Date(a.data))
             .slice(0, 10);
 
@@ -370,14 +380,16 @@ class DashboardController {
                receitas: {
                   confirmado: parseFloat(receitasConfirmadas.confirmado),
                   provisionado: receitasProvisionado,
-                  qtd_confirmadas: receitasConfirmadas.qtd_confirmadas,
+                  qtd_confirmadas: parseInt(
+                     receitasConfirmadas.qtd_confirmadas,
+                  ),
                },
                despesas: {
                   pago: parseFloat(despesasPagas.pago),
                   provisionado: despesasProvisionado,
                   pendente: parseFloat(despesasPendentes.pendente),
-                  qtd_pagas: despesasPagas.qtd_pagas,
-                  qtd_pendentes: despesasPendentes.qtd_pendentes,
+                  qtd_pagas: parseInt(despesasPagas.qtd_pagas),
+                  qtd_pendentes: parseInt(despesasPendentes.qtd_pendentes),
                },
                saldo: {
                   real: saldoReal,
@@ -387,39 +399,45 @@ class DashboardController {
             alertas: {
                despesas_vencidas: despesasVencidas,
                despesas_hoje: despesasHoje,
-               cartoes_criticos: cartoesCriticos.map((c) => ({
+               cartoes_criticos: cartoesCriticos.map((c) => {
+                  const limite = parseFloat(
+                     c.limite_pessoal || c.limite_real || 0,
+                  );
+                  const usado =
+                     parseFloat(c.gasto_mes) + parseFloat(c.pendente_mes);
+                  return {
+                     id: c.id,
+                     nome: c.nome,
+                     limite,
+                     gasto: usado,
+                     percentual: limite
+                        ? Math.round((usado / limite) * 100)
+                        : 0,
+                  };
+               }),
+            },
+            cartoes: cartoes.map((c) => {
+               const limite = parseFloat(
+                  c.limite_pessoal || c.limite_real || 0,
+               );
+               const usado =
+                  parseFloat(c.gasto_mes) + parseFloat(c.pendente_mes);
+               return {
                   id: c.id,
                   nome: c.nome,
-                  limite: parseFloat(c.limite),
-                  gasto: parseFloat(c.gasto_mes) + parseFloat(c.pendente_mes),
-                  percentual: Math.round(
-                     ((parseFloat(c.gasto_mes) + parseFloat(c.pendente_mes)) /
-                        parseFloat(c.limite)) *
-                        100,
-                  ),
-               })),
-            },
-            cartoes: cartoes.map((c) => ({
-               id: c.id,
-               nome: c.nome,
-               tipo: c.tipo,
-               cor: c.cor,
-               bandeira: c.bandeira_nome,
-               mesa: c.mesa_nome,
-               limite: c.limite ? parseFloat(c.limite) : null,
-               gasto_mes: parseFloat(c.gasto_mes),
-               pendente_mes: parseFloat(c.pendente_mes),
-               percentual_usado: c.limite
-                  ? Math.round(
-                       ((parseFloat(c.gasto_mes) + parseFloat(c.pendente_mes)) /
-                          parseFloat(c.limite)) *
-                          100,
-                    )
-                  : null,
-            })),
-            gastos_por_categoria: gastosPorCategoria.map((g) => ({
+                  tipo: c.tipo,
+                  cor: c.cor,
+                  bandeira: c.bandeira_nome,
+                  limite: limite || null,
+                  gasto_mes: parseFloat(c.gasto_mes),
+                  pendente_mes: parseFloat(c.pendente_mes),
+                  percentual_usado: limite
+                     ? Math.round((usado / limite) * 100)
+                     : null,
+               };
+            }),
+            gastos_por_categoria: gastosPorCategoria.map((g, i) => ({
                categoria: g.categoria,
-               cor: g.cor,
                total: parseFloat(g.total),
             })),
             evolucao_mensal: evolucao,

@@ -352,34 +352,42 @@ export default function DashboardPage() {
             )}
 
             {/* ── Cards Principais ────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-               {/* Receitas */}
+            {/* Mobile: grid 7 cols — receitas/despesas = 2 cada, saldo = 3 (mais largo) */}
+            {/* Desktop: 3 colunas iguais */}
+            <div className="grid grid-cols-7 gap-2 md:grid-cols-3 md:gap-4">
+               {/* Receitas — compacto no mobile */}
                <Link
                   href="/dashboard/receitas"
-                  className="group bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 hover:shadow-md hover:border-green-100 transition-all"
+                  className="col-span-2 md:col-span-1 group bg-white rounded-xl shadow-sm border border-gray-100 p-2.5 md:p-5 hover:shadow-md hover:border-green-100 transition-all"
                >
-                  <div className="flex items-center justify-between mb-3">
-                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                     <span className="text-[9px] md:text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Receitas
                      </span>
-                     <span className="text-green-500 group-hover:text-green-600 transition-colors">
+                     <span className="text-green-500 hidden md:block group-hover:text-green-600 transition-colors">
                         <IconReceitas />
                      </span>
                   </div>
                   {loading ? (
                      <>
-                        <Skeleton className="h-7 w-28 mb-1" />
-                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-5 w-full mb-1" />
+                        <Skeleton className="h-2.5 w-full" />
                      </>
                   ) : (
                      <>
-                        <p className="text-xl md:text-2xl font-bold text-green-600">
+                        <p className="text-sm md:text-2xl font-bold text-green-600 truncate">
                            {fmtValorCompacto(
                               dados?.resumo.receitas.confirmado ?? 0,
                            )}
                         </p>
-                        <p className="text-[11px] text-gray-400 mt-1">
+                        <p className="text-[10px] text-gray-400 mt-1 hidden md:block">
                            confirmado · previsto{" "}
+                           {fmtValorCompacto(
+                              dados?.resumo.receitas.provisionado ?? 0,
+                           )}
+                        </p>
+                        <p className="text-[8px] text-gray-400 mt-0.5 md:hidden truncate">
+                           prev.{" "}
                            {fmtValorCompacto(
                               dados?.resumo.receitas.provisionado ?? 0,
                            )}
@@ -388,31 +396,37 @@ export default function DashboardPage() {
                   )}
                </Link>
 
-               {/* Despesas */}
+               {/* Despesas — compacto no mobile */}
                <Link
                   href="/dashboard/despesas"
-                  className="group bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 hover:shadow-md hover:border-red-100 transition-all"
+                  className="col-span-2 md:col-span-1 group bg-white rounded-xl shadow-sm border border-gray-100 p-2.5 md:p-5 hover:shadow-md hover:border-red-100 transition-all"
                >
-                  <div className="flex items-center justify-between mb-3">
-                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                     <span className="text-[9px] md:text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Despesas
                      </span>
-                     <span className="text-red-500 group-hover:text-red-600 transition-colors">
+                     <span className="text-red-500 hidden md:block group-hover:text-red-600 transition-colors">
                         <IconDespesas />
                      </span>
                   </div>
                   {loading ? (
                      <>
-                        <Skeleton className="h-7 w-28 mb-1" />
-                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-5 w-full mb-1" />
+                        <Skeleton className="h-2.5 w-full" />
                      </>
                   ) : (
                      <>
-                        <p className="text-xl md:text-2xl font-bold text-red-600">
+                        <p className="text-sm md:text-2xl font-bold text-red-600 truncate">
                            {fmtValorCompacto(dados?.resumo.despesas.pago ?? 0)}
                         </p>
-                        <p className="text-[11px] text-gray-400 mt-1">
+                        <p className="text-[10px] text-gray-400 mt-1 hidden md:block">
                            pago · previsto{" "}
+                           {fmtValorCompacto(
+                              dados?.resumo.despesas.provisionado ?? 0,
+                           )}
+                        </p>
+                        <p className="text-[8px] text-gray-400 mt-0.5 md:hidden truncate">
+                           prev.{" "}
                            {fmtValorCompacto(
                               dados?.resumo.despesas.provisionado ?? 0,
                            )}
@@ -421,20 +435,20 @@ export default function DashboardPage() {
                   )}
                </Link>
 
-               {/* Saldo */}
-               <div className="col-span-2 md:col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5">
-                  <div className="flex items-center justify-between mb-3">
-                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+               {/* Saldo — maior no mobile (col-span-3 de 7) */}
+               <div className="col-span-3 md:col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 p-2.5 md:p-5">
+                  <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                     <span className="text-[9px] md:text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Saldo
                      </span>
-                     <span className="text-gray-400">
+                     <span className="text-gray-400 hidden md:block">
                         <IconSaldo />
                      </span>
                   </div>
                   {loading ? (
                      <>
-                        <Skeleton className="h-7 w-28 mb-1" />
-                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-5 w-full mb-1" />
+                        <Skeleton className="h-2.5 w-full" />
                      </>
                   ) : (
                      (() => {
@@ -444,12 +458,18 @@ export default function DashboardPage() {
                         return (
                            <>
                               <p
-                                 className={`text-xl md:text-2xl font-bold ${positivo ? "text-blue-600" : "text-red-600"}`}
+                                 className={`text-base md:text-2xl font-bold truncate ${positivo ? "text-blue-600" : "text-red-600"}`}
                               >
                                  {fmtValorCompacto(Math.abs(saldo))}
                               </p>
-                              <p className="text-[11px] text-gray-400 mt-1">
+                              <p className="text-[10px] text-gray-400 mt-1 hidden md:block">
                                  {positivo ? "positivo" : "negativo"} · previsto{" "}
+                                 {fmtValorCompacto(previsto)}
+                              </p>
+                              <p
+                                 className={`text-[8px] mt-0.5 md:hidden truncate ${positivo ? "text-blue-400" : "text-red-400"}`}
+                              >
+                                 {positivo ? "positivo" : "negativo"} · prev.{" "}
                                  {fmtValorCompacto(previsto)}
                               </p>
                            </>
@@ -459,149 +479,147 @@ export default function DashboardPage() {
                </div>
             </div>
 
-            {/* ── Segunda linha: Previsto vs Realizado | Alertas ──────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-               {/* Previsto vs Realizado */}
-               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                     Previsto × Realizado
-                  </h3>
-                  {loading ? (
-                     <div className="space-y-3">
-                        <Skeleton className="h-10" />
-                        <Skeleton className="h-10" />
-                     </div>
-                  ) : (
-                     <div className="space-y-3">
-                        {/* Receitas */}
-                        <div>
-                           <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                              <span>Receitas</span>
-                              <span className="font-medium text-gray-700">
+            {/* ── Previsto × Realizado (full width) ───────────────────────── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5">
+               <h3 className="text-sm font-semibold text-gray-700 mb-4">
+                  Previsto × Realizado
+               </h3>
+               {loading ? (
+                  <div className="space-y-3">
+                     <Skeleton className="h-10" />
+                     <Skeleton className="h-10" />
+                  </div>
+               ) : (
+                  <div className="space-y-3">
+                     {/* Receitas */}
+                     <div>
+                        <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                           <span>Receitas</span>
+                           <span className="font-medium text-gray-700">
+                              {fmtValorCompacto(
+                                 dados?.resumo.receitas.confirmado ?? 0,
+                              )}
+                              <span className="text-gray-400 font-normal">
+                                 {" "}
+                                 /{" "}
                                  {fmtValorCompacto(
-                                    dados?.resumo.receitas.confirmado ?? 0,
+                                    dados?.resumo.receitas.provisionado ?? 0,
                                  )}
-                                 <span className="text-gray-400 font-normal">
-                                    {" "}
-                                    /{" "}
-                                    {fmtValorCompacto(
-                                       dados?.resumo.receitas.provisionado ?? 0,
-                                    )}
-                                 </span>
                               </span>
-                           </div>
-                           <div className="w-full bg-gray-100 rounded-full h-2">
-                              <div
-                                 className="bg-green-500 h-2 rounded-full transition-all duration-700"
-                                 style={{
-                                    width: `${
-                                       dados?.resumo.receitas.provisionado
-                                          ? Math.min(
-                                               (dados.resumo.receitas
-                                                  .confirmado /
-                                                  dados.resumo.receitas
-                                                     .provisionado) *
-                                                  100,
-                                               100,
-                                            )
-                                          : 0
-                                    }%`,
-                                 }}
-                              />
-                           </div>
+                           </span>
                         </div>
-                        {/* Despesas */}
-                        <div>
-                           <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                              <span>Despesas</span>
-                              <span className="font-medium text-gray-700">
-                                 {fmtValorCompacto(
-                                    dados?.resumo.despesas.pago ?? 0,
-                                 )}
-                                 <span className="text-gray-400 font-normal">
-                                    {" "}
-                                    /{" "}
-                                    {fmtValorCompacto(
-                                       dados?.resumo.despesas.provisionado ?? 0,
-                                    )}
-                                 </span>
-                              </span>
-                           </div>
-                           <div className="w-full bg-gray-100 rounded-full h-2">
-                              <div
-                                 className="bg-red-500 h-2 rounded-full transition-all duration-700"
-                                 style={{
-                                    width: `${
-                                       dados?.resumo.despesas.provisionado
-                                          ? Math.min(
-                                               (dados.resumo.despesas.pago /
-                                                  dados.resumo.despesas
-                                                     .provisionado) *
-                                                  100,
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                           <div
+                              className="bg-green-500 h-2 rounded-full transition-all duration-700"
+                              style={{
+                                 width: `${
+                                    dados?.resumo.receitas.provisionado
+                                       ? Math.min(
+                                            (dados.resumo.receitas.confirmado /
+                                               dados.resumo.receitas
+                                                  .provisionado) *
                                                100,
-                                            )
-                                          : 0
-                                    }%`,
-                                 }}
-                              />
-                           </div>
-                        </div>
-                        {/* Resumo */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                           <div className="bg-gray-50 rounded-lg p-2.5">
-                              <p className="text-[10px] text-gray-400 mb-0.5">
-                                 Em aberto
-                              </p>
-                              <p className="text-sm font-semibold text-gray-700">
-                                 {fmtValorCompacto(
-                                    dados?.resumo.despesas.pendente ?? 0,
-                                 )}
-                              </p>
-                           </div>
-                           <div className="bg-gray-50 rounded-lg p-2.5">
-                              <p className="text-[10px] text-gray-400 mb-0.5">
-                                 Despesas pagas
-                              </p>
-                              <p className="text-sm font-semibold text-gray-700">
-                                 {dados?.resumo.despesas.qtd_pagas ?? 0}{" "}
-                                 lançamento
-                                 {dados?.resumo.despesas.qtd_pagas !== 1
-                                    ? "s"
-                                    : ""}
-                              </p>
-                           </div>
+                                            100,
+                                         )
+                                       : 0
+                                 }%`,
+                              }}
+                           />
                         </div>
                      </div>
-                  )}
-               </div>
+                     {/* Despesas */}
+                     <div>
+                        <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                           <span>Despesas</span>
+                           <span className="font-medium text-gray-700">
+                              {fmtValorCompacto(
+                                 dados?.resumo.despesas.pago ?? 0,
+                              )}
+                              <span className="text-gray-400 font-normal">
+                                 {" "}
+                                 /{" "}
+                                 {fmtValorCompacto(
+                                    dados?.resumo.despesas.provisionado ?? 0,
+                                 )}
+                              </span>
+                           </span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                           <div
+                              className="bg-red-500 h-2 rounded-full transition-all duration-700"
+                              style={{
+                                 width: `${
+                                    dados?.resumo.despesas.provisionado
+                                       ? Math.min(
+                                            (dados.resumo.despesas.pago /
+                                               dados.resumo.despesas
+                                                  .provisionado) *
+                                               100,
+                                            100,
+                                         )
+                                       : 0
+                                 }%`,
+                              }}
+                           />
+                        </div>
+                     </div>
+                     {/* Mini resumo */}
+                     <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                           <p className="text-[10px] text-gray-400 mb-0.5">
+                              Em aberto
+                           </p>
+                           <p className="text-sm font-semibold text-gray-700">
+                              {fmtValorCompacto(
+                                 dados?.resumo.despesas.pendente ?? 0,
+                              )}
+                           </p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                           <p className="text-[10px] text-gray-400 mb-0.5">
+                              Despesas pagas
+                           </p>
+                           <p className="text-sm font-semibold text-gray-700">
+                              {dados?.resumo.despesas.qtd_pagas ?? 0} lançamento
+                              {dados?.resumo.despesas.qtd_pagas !== 1
+                                 ? "s"
+                                 : ""}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               )}
+            </div>
 
+            {/* ── Atenção + Cartões — lado a lado (mobile e desktop) ───────── */}
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
                {/* Alertas */}
                <Link
                   href="/dashboard/despesas"
-                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 hover:shadow-md transition-all"
+                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5 hover:shadow-md transition-all"
                >
-                  <div className="flex items-center justify-between mb-4">
-                     <h3 className="text-sm font-semibold text-gray-700">
+                  <div className="flex items-center justify-between mb-3">
+                     <h3 className="text-xs md:text-sm font-semibold text-gray-700">
                         Atenção
                      </h3>
                      {totalAlertas > 0 && (
-                        <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                        <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                            {totalAlertas}
                         </span>
                      )}
                   </div>
                   {loading ? (
                      <div className="space-y-2">
-                        <Skeleton className="h-8" />
-                        <Skeleton className="h-8" />
-                        <Skeleton className="h-8" />
+                        <Skeleton className="h-7" />
+                        <Skeleton className="h-7" />
+                        <Skeleton className="h-7" />
                      </div>
                   ) : (
-                     <div className="space-y-2">
+                     <div className="space-y-1.5">
                         {totalAlertas === 0 ? (
-                           <div className="flex flex-col items-center justify-center py-4 text-center">
+                           <div className="flex flex-col items-center justify-center py-3 text-center">
                               <svg
-                                 className="w-8 h-8 text-green-300 mb-2"
+                                 className="w-6 h-6 text-green-300 mb-1.5"
                                  fill="none"
                                  stroke="currentColor"
                                  viewBox="0 0 24 24"
@@ -613,8 +631,8 @@ export default function DashboardPage() {
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                                  />
                               </svg>
-                              <p className="text-xs text-gray-400">
-                                 Nenhuma pendência este mês
+                              <p className="text-[10px] text-gray-400">
+                                 Nenhuma pendência
                               </p>
                            </div>
                         ) : (
@@ -624,17 +642,17 @@ export default function DashboardPage() {
                                  .map((d) => (
                                     <div
                                        key={d.id}
-                                       className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2"
+                                       className="flex items-center justify-between bg-red-50 rounded-lg px-2 py-1.5"
                                     >
-                                       <div className="flex items-center gap-2 min-w-0">
-                                          <span className="text-red-500 shrink-0">
+                                       <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-red-500 shrink-0 w-3 h-3">
                                              <IconAlerta />
                                           </span>
-                                          <span className="text-xs text-gray-700 truncate">
+                                          <span className="text-[10px] text-gray-700 truncate">
                                              {d.descricao}
                                           </span>
                                        </div>
-                                       <span className="text-xs font-semibold text-red-600 ml-2 shrink-0">
+                                       <span className="text-[10px] font-semibold text-red-600 ml-1 shrink-0">
                                           {fmtValorCompacto(d.valor)}
                                        </span>
                                     </div>
@@ -644,17 +662,17 @@ export default function DashboardPage() {
                                  .map((d) => (
                                     <div
                                        key={d.id}
-                                       className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2"
+                                       className="flex items-center justify-between bg-amber-50 rounded-lg px-2 py-1.5"
                                     >
-                                       <div className="flex items-center gap-2 min-w-0">
-                                          <span className="text-amber-500 shrink-0">
+                                       <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-amber-500 shrink-0 w-3 h-3">
                                              <IconAlerta />
                                           </span>
-                                          <span className="text-xs text-gray-700 truncate">
-                                             {d.descricao} · vence hoje
+                                          <span className="text-[10px] text-gray-700 truncate">
+                                             {d.descricao}
                                           </span>
                                        </div>
-                                       <span className="text-xs font-semibold text-amber-600 ml-2 shrink-0">
+                                       <span className="text-[10px] font-semibold text-amber-600 ml-1 shrink-0">
                                           {fmtValorCompacto(d.valor)}
                                        </span>
                                     </div>
@@ -662,23 +680,23 @@ export default function DashboardPage() {
                               {dados?.alertas.cartoes_criticos.map((c) => (
                                  <div
                                     key={c.id}
-                                    className="flex items-center justify-between bg-orange-50 rounded-lg px-3 py-2"
+                                    className="flex items-center justify-between bg-orange-50 rounded-lg px-2 py-1.5"
                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                       <span className="text-orange-500 shrink-0">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                       <span className="text-orange-500 shrink-0 w-3 h-3">
                                           <IconCartao />
                                        </span>
-                                       <span className="text-xs text-gray-700 truncate">
-                                          {c.nome} · {c.percentual}% usado
+                                       <span className="text-[10px] text-gray-700 truncate">
+                                          {c.nome} · {c.percentual}%
                                        </span>
                                     </div>
-                                    <span className="text-xs font-semibold text-orange-600 ml-2 shrink-0">
+                                    <span className="text-[10px] font-semibold text-orange-600 ml-1 shrink-0">
                                        {fmtValorCompacto(c.gasto)}
                                     </span>
                                  </div>
                               ))}
                               {totalAlertas > 3 && (
-                                 <p className="text-xs text-gray-400 text-center pt-1">
+                                 <p className="text-[10px] text-gray-400 text-center pt-0.5">
                                     + {totalAlertas - 3} mais →
                                  </p>
                               )}
@@ -687,77 +705,14 @@ export default function DashboardPage() {
                      </div>
                   )}
                </Link>
-            </div>
-
-            {/* ── Gráfico Evolução Mensal + Cartões ───────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
-               {/* Evolução 6 meses */}
-               <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                     Evolução dos últimos 6 meses
-                  </h3>
-                  {loading ? (
-                     <Skeleton className="h-48" />
-                  ) : (
-                     <ResponsiveContainer width="100%" height={200}>
-                        <BarChart
-                           data={dados?.evolucao_mensal ?? []}
-                           barCategoryGap="30%"
-                           barGap={2}
-                        >
-                           <CartesianGrid
-                              strokeDasharray="3 3"
-                              stroke="#f1f5f9"
-                           />
-                           <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 11, fill: "#94a3b8" }}
-                              axisLine={false}
-                              tickLine={false}
-                           />
-                           <YAxis
-                              tick={{ fontSize: 10, fill: "#94a3b8" }}
-                              axisLine={false}
-                              tickLine={false}
-                              tickFormatter={(v) =>
-                                 `R$${(v / 1000).toFixed(0)}k`
-                              }
-                              width={42}
-                           />
-                           <Tooltip content={<TooltipCustom />} />
-                           <Legend
-                              wrapperStyle={{
-                                 fontSize: "11px",
-                                 color: "#94a3b8",
-                                 paddingTop: "8px",
-                              }}
-                           />
-                           <Bar
-                              dataKey="receitas"
-                              name="Receitas"
-                              fill="#16a34a"
-                              radius={[3, 3, 0, 0]}
-                              maxBarSize={32}
-                           />
-                           <Bar
-                              dataKey="despesas"
-                              name="Despesas"
-                              fill="#dc2626"
-                              radius={[3, 3, 0, 0]}
-                              maxBarSize={32}
-                           />
-                        </BarChart>
-                     </ResponsiveContainer>
-                  )}
-               </div>
 
                {/* Cartões */}
                <Link
                   href="/dashboard/cartoes"
-                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 hover:shadow-md transition-all"
+                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5 hover:shadow-md transition-all"
                >
-                  <div className="flex items-center justify-between mb-4">
-                     <h3 className="text-sm font-semibold text-gray-700">
+                  <div className="flex items-center justify-between mb-3 md:mb-4">
+                     <h3 className="text-xs md:text-sm font-semibold text-gray-700">
                         Cartões
                      </h3>
                      <span className="text-gray-400 group-hover:text-gray-600 transition-colors">
@@ -765,25 +720,25 @@ export default function DashboardPage() {
                      </span>
                   </div>
                   {loading ? (
-                     <div className="space-y-4">
-                        <Skeleton className="h-12" />
-                        <Skeleton className="h-12" />
-                        <Skeleton className="h-12" />
+                     <div className="space-y-3">
+                        <Skeleton className="h-8" />
+                        <Skeleton className="h-8" />
+                        <Skeleton className="h-8" />
                      </div>
                   ) : dados?.cartoes.filter(
                        (c) => c.tipo === "credito" && c.limite,
                     ).length === 0 ? (
-                     <p className="text-xs text-gray-400 text-center py-4">
-                        Nenhum cartão de crédito cadastrado
+                     <p className="text-[10px] text-gray-400 text-center py-4">
+                        Nenhum cartão cadastrado
                      </p>
                   ) : (
-                     <div className="space-y-3 max-h-48 overflow-y-auto pr-0.5">
+                     <div className="space-y-3 max-h-40 overflow-y-auto pr-0.5">
                         {dados?.cartoes
                            .filter((c) => c.tipo === "credito" && c.limite)
                            .map((cartao) => (
                               <div key={cartao.id}>
                                  <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-1.5 min-w-0">
                                        {cartao.cor && (
                                           <span
                                              className="w-2 h-2 rounded-full shrink-0"
@@ -792,12 +747,12 @@ export default function DashboardPage() {
                                              }}
                                           />
                                        )}
-                                       <span className="text-xs text-gray-700 font-medium truncate">
+                                       <span className="text-[10px] md:text-[11px] text-gray-700 font-medium truncate">
                                           {cartao.nome}
                                        </span>
                                     </div>
                                     <span
-                                       className={`text-xs font-semibold shrink-0 ml-2 ${
+                                       className={`text-[10px] md:text-[11px] font-semibold shrink-0 ml-1 ${
                                           (cartao.percentual_usado ?? 0) >= 90
                                              ? "text-red-600"
                                              : (cartao.percentual_usado ?? 0) >=
@@ -813,11 +768,11 @@ export default function DashboardPage() {
                                     percentual={cartao.percentual_usado ?? 0}
                                     cor={cartao.cor ?? "#16a34a"}
                                  />
-                                 <p className="text-[10px] text-gray-400 mt-1">
+                                 <p className="text-[9px] text-gray-400 mt-0.5">
                                     {fmtValorCompacto(
                                        cartao.gasto_mes + cartao.pendente_mes,
                                     )}{" "}
-                                    de {fmtValorCompacto(cartao.limite!)}
+                                    / {fmtValorCompacto(cartao.limite!)}
                                  </p>
                               </div>
                            ))}
@@ -826,18 +781,77 @@ export default function DashboardPage() {
                </Link>
             </div>
 
+            {/* ── Evolução Mensal (full width, compacto no mobile) ─────────── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5">
+               <h3 className="text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-4">
+                  Evolução dos últimos 6 meses
+               </h3>
+               {loading ? (
+                  <Skeleton className="h-28 md:h-48" />
+               ) : (
+                  <ResponsiveContainer
+                     width="100%"
+                     height={120}
+                     className="md:!h-[200px]"
+                  >
+                     <BarChart
+                        data={dados?.evolucao_mensal ?? []}
+                        barCategoryGap="30%"
+                        barGap={2}
+                     >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis
+                           dataKey="label"
+                           tick={{ fontSize: 9, fill: "#94a3b8" }}
+                           axisLine={false}
+                           tickLine={false}
+                        />
+                        <YAxis
+                           tick={{ fontSize: 9, fill: "#94a3b8" }}
+                           axisLine={false}
+                           tickLine={false}
+                           tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                           width={26}
+                        />
+                        <Tooltip content={<TooltipCustom />} />
+                        <Legend
+                           wrapperStyle={{
+                              fontSize: "10px",
+                              color: "#94a3b8",
+                              paddingTop: "4px",
+                           }}
+                        />
+                        <Bar
+                           dataKey="receitas"
+                           name="Receitas"
+                           fill="#16a34a"
+                           radius={[3, 3, 0, 0]}
+                           maxBarSize={24}
+                        />
+                        <Bar
+                           dataKey="despesas"
+                           name="Despesas"
+                           fill="#dc2626"
+                           radius={[3, 3, 0, 0]}
+                           maxBarSize={24}
+                        />
+                     </BarChart>
+                  </ResponsiveContainer>
+               )}
+            </div>
+
             {/* ── Maiores Gastos + Fluxo de Caixa ─────────────────────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
                {/* Maiores gastos por categoria */}
                <Link
                   href="/dashboard/despesas"
-                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 hover:shadow-md transition-all"
+                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5 hover:shadow-md transition-all"
                >
-                  <div className="flex items-center justify-between mb-4">
-                     <h3 className="text-sm font-semibold text-gray-700">
+                  <div className="flex items-center justify-between mb-3 md:mb-4">
+                     <h3 className="text-xs md:text-sm font-semibold text-gray-700">
                         Maiores gastos
                      </h3>
-                     <span className="text-gray-400 group-hover:text-gray-600 transition-colors">
+                     <span className="text-gray-400 group-hover:text-gray-600 transition-colors hidden md:block">
                         <IconCategoria />
                      </span>
                   </div>
@@ -895,27 +909,31 @@ export default function DashboardPage() {
                </Link>
 
                {/* Fluxo de caixa */}
-               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5">
-                  <div className="flex items-center justify-between mb-4">
-                     <h3 className="text-sm font-semibold text-gray-700">
+               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5">
+                  <div className="flex items-center justify-between mb-3 md:mb-4">
+                     <h3 className="text-xs md:text-sm font-semibold text-gray-700">
                         Fluxo de caixa
                      </h3>
-                     <span className="text-gray-400">
+                     <span className="text-gray-400 hidden md:block">
                         <IconFluxo />
                      </span>
                   </div>
                   {loading ? (
-                     <Skeleton className="h-48" />
+                     <Skeleton className="h-32 md:h-48" />
                   ) : (dados?.fluxo_caixa.filter(
                        (f) => f.receitas > 0 || f.despesas > 0,
                     ).length ?? 0) === 0 ? (
-                     <div className="flex items-center justify-center h-40">
-                        <p className="text-xs text-gray-400">
-                           Sem movimentações no período
+                     <div className="flex items-center justify-center h-28 md:h-40">
+                        <p className="text-xs text-gray-400 text-center">
+                           Sem movimentações
                         </p>
                      </div>
                   ) : (
-                     <ResponsiveContainer width="100%" height={190}>
+                     <ResponsiveContainer
+                        width="100%"
+                        height={130}
+                        className="md:!h-[190px]"
+                     >
                         <LineChart
                            data={
                               dados?.fluxo_caixa.filter(
@@ -929,18 +947,16 @@ export default function DashboardPage() {
                            />
                            <XAxis
                               dataKey="label"
-                              tick={{ fontSize: 10, fill: "#94a3b8" }}
+                              tick={{ fontSize: 9, fill: "#94a3b8" }}
                               axisLine={false}
                               tickLine={false}
                            />
                            <YAxis
-                              tick={{ fontSize: 10, fill: "#94a3b8" }}
+                              tick={{ fontSize: 9, fill: "#94a3b8" }}
                               axisLine={false}
                               tickLine={false}
-                              tickFormatter={(v) =>
-                                 `R$${(v / 1000).toFixed(0)}k`
-                              }
-                              width={42}
+                              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                              width={26}
                            />
                            <Tooltip content={<TooltipCustom />} />
                            <Line

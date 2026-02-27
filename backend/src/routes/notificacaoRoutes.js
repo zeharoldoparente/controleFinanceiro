@@ -11,10 +11,17 @@ router.use(authMiddleware);
  * /api/notificacoes:
  *   get:
  *     summary: Listar notificações do usuário
- *     description: Retorna todas as notificações do usuário logado
+ *     description: Retorna todas as notificações do usuário logado. Inclui contagem de não lidas na resposta.
  *     tags: [Notificações]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: apenas_nao_lidas
+ *         schema:
+ *           type: boolean
+ *         description: Se true, retorna apenas notificações não lidas
+ *         example: false
  *     responses:
  *       200:
  *         description: Lista de notificações
@@ -52,9 +59,18 @@ router.use(authMiddleware);
  *                         example: /convites/abc123
  *                       dados_extras:
  *                         type: object
+ *                         example: { "token": "abc123", "mesa_id": 1 }
  *                       created_at:
  *                         type: string
  *                         format: date-time
+ *                 nao_lidas:
+ *                   type: integer
+ *                   description: Total de notificações não lidas
+ *                   example: 2
+ *       401:
+ *         description: Não autenticado
+ *       500:
+ *         description: Erro interno
  */
 router.get("/", NotificacaoController.list);
 
@@ -63,7 +79,7 @@ router.get("/", NotificacaoController.list);
  * /api/notificacoes/nao-lidas/count:
  *   get:
  *     summary: Contar notificações não lidas
- *     description: Retorna o número de notificações não lidas do usuário (para o "sininho")
+ *     description: Retorna apenas o número de notificações não lidas (usado para o badge do sino)
  *     tags: [Notificações]
  *     security:
  *       - bearerAuth: []
@@ -78,15 +94,46 @@ router.get("/", NotificacaoController.list);
  *                 total:
  *                   type: integer
  *                   example: 3
+ *       401:
+ *         description: Não autenticado
+ *       500:
+ *         description: Erro interno
  */
 router.get("/nao-lidas/count", NotificacaoController.countNaoLidas);
+
+/**
+ * @swagger
+ * /api/notificacoes/marcar-todas-lidas:
+ *   patch:
+ *     summary: Marcar todas as notificações como lidas
+ *     description: Marca todas as notificações não lidas do usuário como lidas de uma vez
+ *     tags: [Notificações]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Todas as notificações marcadas como lidas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Todas as notificações marcadas como lidas
+ *       401:
+ *         description: Não autenticado
+ *       500:
+ *         description: Erro interno
+ */
+router.patch("/marcar-todas-lidas", NotificacaoController.marcarTodasLidas);
 
 /**
  * @swagger
  * /api/notificacoes/{id}/marcar-lida:
  *   patch:
  *     summary: Marcar notificação como lida
- *     description: Marca uma notificação específica como lida
+ *     description: Marca uma notificação específica como lida. A notificação só some visualmente após o usuário abrir o menu e selecioná-la.
  *     tags: [Notificações]
  *     security:
  *       - bearerAuth: []
@@ -100,30 +147,29 @@ router.get("/nao-lidas/count", NotificacaoController.countNaoLidas);
  *     responses:
  *       200:
  *         description: Notificação marcada como lida
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Notificação marcada como lida
+ *       404:
+ *         description: Notificação não encontrada
+ *       401:
+ *         description: Não autenticado
+ *       500:
+ *         description: Erro interno
  */
 router.patch("/:id/marcar-lida", NotificacaoController.marcarLida);
-
-/**
- * @swagger
- * /api/notificacoes/marcar-todas-lidas:
- *   patch:
- *     summary: Marcar todas as notificações como lidas
- *     description: Marca todas as notificações do usuário como lidas
- *     tags: [Notificações]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Todas as notificações marcadas como lidas
- */
-router.patch("/marcar-todas-lidas", NotificacaoController.marcarTodasLidas);
 
 /**
  * @swagger
  * /api/notificacoes/{id}:
  *   delete:
  *     summary: Deletar notificação
- *     description: Remove uma notificação específica
+ *     description: Remove permanentemente uma notificação específica do usuário
  *     tags: [Notificações]
  *     security:
  *       - bearerAuth: []
@@ -136,7 +182,21 @@ router.patch("/marcar-todas-lidas", NotificacaoController.marcarTodasLidas);
  *         example: 1
  *     responses:
  *       200:
- *         description: Notificação deletada
+ *         description: Notificação removida
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Notificação removida
+ *       404:
+ *         description: Notificação não encontrada
+ *       401:
+ *         description: Não autenticado
+ *       500:
+ *         description: Erro interno
  */
 router.delete("/:id", NotificacaoController.delete);
 

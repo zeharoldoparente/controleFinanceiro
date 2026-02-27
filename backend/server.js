@@ -34,7 +34,9 @@ app.use(
       credentials: true,
    }),
 );
+
 app.use(express.json());
+
 app.use(
    "/api-docs",
    swaggerUi.serve,
@@ -47,10 +49,12 @@ app.use(
       },
    }),
 );
+
 db.getConnection()
    .then(() => console.log("✅ Conectado ao MySQL!"))
    .catch((err) => console.error("❌ Erro ao conectar:", err));
 
+// ── Rotas ──────────────────────────────────────────────────────────────────
 const authRoutes = require("./src/routes/authRoutes");
 const categoriaRoutes = require("./src/routes/categoriaRoutes");
 const formaPagamentoRoutes = require("./src/routes/formaPagamentoRoutes");
@@ -62,6 +66,7 @@ const notificacaoRoutes = require("./src/routes/notificacaoRoutes");
 const bandeiraRoutes = require("./src/routes/bandeiraRoutes");
 const tipoPagamentoRoutes = require("./src/routes/tipoPagamentoRoutes");
 const mesaRoutes = require("./src/routes/mesaRoutes");
+const mesaMembroRoutes = require("./src/routes/mesaMembroRoutes");
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
 
 app.use("/api/auth", authRoutes);
@@ -75,6 +80,7 @@ app.use("/api/notificacoes", notificacaoRoutes);
 app.use("/api/bandeiras", bandeiraRoutes);
 app.use("/api/tipos-pagamento", tipoPagamentoRoutes);
 app.use("/api/mesa", mesaRoutes);
+app.use("/api/mesa/:mesa_id/membros", mesaMembroRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
