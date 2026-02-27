@@ -5,6 +5,7 @@ class Despesa {
    static async create(
       mesaId,
       descricao,
+      tipo,
       valorProvisionado,
       dataVencimento,
       categoriaId,
@@ -17,11 +18,12 @@ class Despesa {
    ) {
       const [result] = await db.query(
          `INSERT INTO despesas 
-         (mesa_id, descricao, valor_provisionado, data_vencimento, categoria_id, tipo_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual, parcela_grupo_id, ativa) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
+         (mesa_id, descricao, tipo, valor_provisionado, data_vencimento, categoria_id, tipo_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual, parcela_grupo_id, ativa) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
          [
             mesaId,
             descricao,
+            tipo || "variavel",
             valorProvisionado,
             dataVencimento,
             categoriaId,
@@ -40,6 +42,7 @@ class Despesa {
       const values = despesas.map((d) => [
          d.mesaId,
          d.descricao,
+         d.tipo || "variavel",
          d.valorProvisionado,
          d.dataVencimento,
          d.categoriaId,
@@ -53,18 +56,58 @@ class Despesa {
       ]);
 
       const placeholders = values
-         .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+         .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
          .join(", ");
       const flatValues = values.flat();
 
       await db.query(
          `INSERT INTO despesas 
-         (mesa_id, descricao, valor_provisionado, data_vencimento, categoria_id, tipo_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual, parcela_grupo_id, ativa) 
+         (mesa_id, descricao, tipo, valor_provisionado, data_vencimento, categoria_id, tipo_pagamento_id, cartao_id, recorrente, parcelas, parcela_atual, parcela_grupo_id, ativa) 
          VALUES ${placeholders}`,
          flatValues,
       );
    }
 
+   // Busca filtrada por mês — usada pela listagem principal
+   // Despesas normais: apenas no mês exato do vencimento
+   // Despesas recorrentes: aparecem em todos os meses a partir do vencimento
+   //   até o mês anterior ao data_cancelamento (exclusive)
+   static async findByMesaIdFiltrado(mesaId, mes) {
+      // mes formato: "YYYY-MM"
+      const primeiroDia = `${mes}-01`;
+
+      const [rows] = await db.query(
+         `SELECT 
+            d.*,
+            c.nome as categoria_nome,
+            tp.nome as tipo_pagamento_nome,
+            car.nome as cartao_nome
+         FROM despesas d
+         LEFT JOIN categorias c ON d.categoria_id = c.id
+         LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+         LEFT JOIN cartoes car ON d.cartao_id = car.id
+         WHERE d.mesa_id = ? AND d.ativa = TRUE AND (
+            -- Despesas normais (não recorrentes): apenas no mês exato
+            (d.recorrente = FALSE AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?)
+            OR
+            -- Despesas recorrentes: do mês de criação em diante,
+            -- mas APENAS se não foi cancelada antes ou durante este mês
+            (
+               d.recorrente = TRUE
+               AND d.data_vencimento <= LAST_DAY(?)
+               AND (
+                  d.data_cancelamento IS NULL
+                  OR DATE_FORMAT(d.data_cancelamento, '%Y-%m') > ?
+               )
+            )
+         )
+         ORDER BY d.data_vencimento ASC`,
+         [mesaId, mes, primeiroDia, mes],
+      );
+      return rows;
+   }
+
+   // Mantido para compatibilidade com outros usos
    static async findByMesaId(mesaId, incluirInativas = false) {
       let query = `
          SELECT 
@@ -83,7 +126,7 @@ class Despesa {
          query += " AND d.ativa = TRUE";
       }
 
-      query += " ORDER BY d.data_vencimento DESC";
+      query += " ORDER BY d.data_vencimento ASC";
 
       const [rows] = await db.query(query, [mesaId]);
       return rows;
@@ -128,6 +171,7 @@ class Despesa {
       id,
       mesaId,
       descricao,
+      tipo,
       valorProvisionado,
       dataVencimento,
       categoriaId,
@@ -137,10 +181,11 @@ class Despesa {
    ) {
       await db.query(
          `UPDATE despesas 
-         SET descricao = ?, valor_provisionado = ?, data_vencimento = ?, categoria_id = ?, tipo_pagamento_id = ?, cartao_id = ?, recorrente = ?
+         SET descricao = ?, tipo = ?, valor_provisionado = ?, data_vencimento = ?, categoria_id = ?, tipo_pagamento_id = ?, cartao_id = ?, recorrente = ?
          WHERE id = ? AND mesa_id = ?`,
          [
             descricao,
+            tipo || "variavel",
             valorProvisionado,
             dataVencimento,
             categoriaId,
@@ -165,6 +210,34 @@ class Despesa {
          SET paga = TRUE, valor_real = ?, data_pagamento = ?, comprovante = ?
          WHERE id = ? AND mesa_id = ?`,
          [valorReal, dataPagamento, comprovante, id, mesaId],
+      );
+   }
+
+   static async desmarcarPagamento(id, mesaId) {
+      await db.query(
+         `UPDATE despesas 
+         SET paga = FALSE, valor_real = NULL, data_pagamento = NULL, comprovante = NULL
+         WHERE id = ? AND mesa_id = ?`,
+         [id, mesaId],
+      );
+   }
+
+   // Cancela recorrência a partir do mês informado (inclusive)
+   // Formato: dataCancelamento = 'YYYY-MM-01'
+   static async cancelarRecorrencia(id, mesaId, dataCancelamento) {
+      await db.query(
+         `UPDATE despesas 
+         SET data_cancelamento = ?
+         WHERE id = ? AND mesa_id = ? AND recorrente = TRUE`,
+         [dataCancelamento, id, mesaId],
+      );
+   }
+
+   // Remove cancelamento, tornando a recorrência infinita novamente
+   static async removerCancelamento(id, mesaId) {
+      await db.query(
+         "UPDATE despesas SET data_cancelamento = NULL WHERE id = ? AND mesa_id = ?",
+         [id, mesaId],
       );
    }
 

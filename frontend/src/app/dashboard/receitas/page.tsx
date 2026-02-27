@@ -142,27 +142,19 @@ export default function ReceitasPage() {
    }, [receitas, filtroStatus, filtroRecorrente]);
 
    // Totais do mês filtrado
-   const totalRecebido = useMemo(
-      () =>
-         receitasFiltradas
-            .filter(
-               (r) =>
-                  r.data_recebimento <= new Date().toISOString().split("T")[0],
-            )
-            .reduce((acc, r) => acc + r.valor, 0),
-      [receitasFiltradas],
-   );
+   const totalRecebido = useMemo(() => {
+      const hoje = new Date().toISOString().split("T")[0];
+      return receitasFiltradas
+         .filter((r) => r.data_recebimento.substring(0, 10) <= hoje)
+         .reduce((acc, r) => acc + parseFloat(String(r.valor)), 0);
+   }, [receitasFiltradas]);
 
-   const totalAReceber = useMemo(
-      () =>
-         receitasFiltradas
-            .filter(
-               (r) =>
-                  r.data_recebimento > new Date().toISOString().split("T")[0],
-            )
-            .reduce((acc, r) => acc + r.valor, 0),
-      [receitasFiltradas],
-   );
+   const totalAReceber = useMemo(() => {
+      const hoje = new Date().toISOString().split("T")[0];
+      return receitasFiltradas
+         .filter((r) => r.data_recebimento.substring(0, 10) > hoje)
+         .reduce((acc, r) => acc + parseFloat(String(r.valor)), 0);
+   }, [receitasFiltradas]);
 
    const abrirModal = (receita?: Receita) => {
       if (receita) {
@@ -264,11 +256,11 @@ export default function ReceitasPage() {
       }
    };
 
-   const formatarValor = (valor: number) =>
+   const formatarValor = (valor: number | string) =>
       new Intl.NumberFormat("pt-BR", {
          style: "currency",
          currency: "BRL",
-      }).format(valor);
+      }).format(parseFloat(String(valor)));
 
    // MySQL pode retornar "2026-02-01T00:00:00.000Z" ou "2026-02-01"
    // substring(0,10) garante que pegamos sempre "YYYY-MM-DD"
@@ -343,10 +335,91 @@ export default function ReceitasPage() {
                </div>
             )}
 
-            {/* Filtros */}
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
-               <div className="flex flex-col sm:flex-row gap-3">
-                  {/* Seletor de Mês */}
+            {/* Filtros — Desktop: colunas expandidas | Mobile: linha compacta */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 p-3 sm:p-4">
+               {/* ── MOBILE ── */}
+               <div className="flex items-center gap-2 sm:hidden">
+                  {/* Mês compacto */}
+                  <select
+                     value={mesSelecionado}
+                     onChange={(e) => setMesSelecionado(e.target.value)}
+                     className="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                     {meses.map((m) => (
+                        <option key={m.valor} value={m.valor}>
+                           {m.label}
+                        </option>
+                     ))}
+                  </select>
+
+                  {/* Status — bolinhas */}
+                  <div className="flex items-center gap-1">
+                     {[
+                        { valor: "todas", cor: "bg-gray-400", titulo: "Todas" },
+                        {
+                           valor: "a_receber",
+                           cor: "bg-blue-500",
+                           titulo: "A receber",
+                        },
+                        {
+                           valor: "recebida",
+                           cor: "bg-green-500",
+                           titulo: "Recebida",
+                        },
+                     ].map((op) => (
+                        <button
+                           key={op.valor}
+                           title={op.titulo}
+                           onClick={() =>
+                              setFiltroStatus(op.valor as typeof filtroStatus)
+                           }
+                           className={`w-5 h-5 rounded-full transition-all ${op.cor} ${
+                              filtroStatus === op.valor
+                                 ? "ring-2 ring-offset-1 ring-gray-400 scale-110"
+                                 : "opacity-30"
+                           }`}
+                        />
+                     ))}
+                  </div>
+
+                  {/* Divisor */}
+                  <span className="text-gray-300 text-xs">|</span>
+
+                  {/* Recorrente — bolinhas */}
+                  <div className="flex items-center gap-1">
+                     {[
+                        { valor: "todas", cor: "bg-gray-400", titulo: "Todas" },
+                        {
+                           valor: "sim",
+                           cor: "bg-purple-500",
+                           titulo: "Recorrente",
+                        },
+                        {
+                           valor: "nao",
+                           cor: "bg-orange-400",
+                           titulo: "Não recorr.",
+                        },
+                     ].map((op) => (
+                        <button
+                           key={op.valor}
+                           title={op.titulo}
+                           onClick={() =>
+                              setFiltroRecorrente(
+                                 op.valor as typeof filtroRecorrente,
+                              )
+                           }
+                           className={`w-5 h-5 rounded-full transition-all ${op.cor} ${
+                              filtroRecorrente === op.valor
+                                 ? "ring-2 ring-offset-1 ring-gray-400 scale-110"
+                                 : "opacity-30"
+                           }`}
+                        />
+                     ))}
+                  </div>
+               </div>
+
+               {/* ── DESKTOP ── */}
+               <div className="hidden sm:flex gap-3">
                   <div className="flex-1">
                      <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
                         Mês
@@ -363,8 +436,6 @@ export default function ReceitasPage() {
                         ))}
                      </select>
                   </div>
-
-                  {/* Filtro Status */}
                   <div className="flex-1">
                      <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
                         Status
@@ -393,8 +464,6 @@ export default function ReceitasPage() {
                         ))}
                      </div>
                   </div>
-
-                  {/* Filtro Recorrente */}
                   <div className="flex-1">
                      <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
                         Recorrente
@@ -426,23 +495,31 @@ export default function ReceitasPage() {
                </div>
             </div>
 
-            {/* Cards de Resumo do Mês */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Recebido no mês</p>
-                  <p className="text-lg font-bold text-green-600">
+            {/* Cards de Resumo */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-2.5 sm:p-4">
+                  <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 sm:mb-1 truncate">
+                     <span className="sm:hidden">Recebido</span>
+                     <span className="hidden sm:inline">Recebido no mês</span>
+                  </p>
+                  <p className="text-sm sm:text-lg font-bold text-green-600 truncate">
                      {formatarValor(totalRecebido)}
                   </p>
                </div>
-               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
-                  <p className="text-xs text-gray-500 mb-1">A receber</p>
-                  <p className="text-lg font-bold text-blue-600">
+               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-2.5 sm:p-4">
+                  <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 sm:mb-1 truncate">
+                     A receber
+                  </p>
+                  <p className="text-sm sm:text-lg font-bold text-blue-600 truncate">
                      {formatarValor(totalAReceber)}
                   </p>
                </div>
-               <div className="col-span-2 md:col-span-1 bg-white rounded-xl shadow-md border border-gray-100 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Total previsto</p>
-                  <p className="text-lg font-bold text-gray-700">
+               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-2.5 sm:p-4">
+                  <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 sm:mb-1 truncate">
+                     <span className="sm:hidden">Total</span>
+                     <span className="hidden sm:inline">Total previsto</span>
+                  </p>
+                  <p className="text-sm sm:text-lg font-bold text-gray-700 truncate">
                      {formatarValor(totalRecebido + totalAReceber)}
                   </p>
                </div>
@@ -472,100 +549,179 @@ export default function ReceitasPage() {
                   </p>
                </div>
             ) : (
-               <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                  <div className="overflow-x-auto">
-                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                           <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                 Descrição
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                 Categoria
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                 Tipo Pgto
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                 Valor
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                 Data
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                 Status
-                              </th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                                 Ações
-                              </th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                           {receitasFiltradas.map((receita) => {
-                              const status = getStatusReceita(receita);
-                              return (
-                                 <tr
-                                    key={receita.id}
-                                    className="hover:bg-gray-50 transition-colors"
-                                 >
-                                    <td className="px-4 py-3">
-                                       <div className="text-sm font-medium text-gray-900">
-                                          {receita.descricao}
-                                       </div>
-                                       {receita.recorrente && (
-                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 mt-0.5">
-                                             🔄 Recorrente
-                                          </span>
-                                       )}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                       {receita.categoria_nome || "—"}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                       {receita.tipo_pagamento_nome || "—"}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm font-semibold text-green-600">
-                                       {formatarValor(receita.valor)}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
+               <>
+                  {/* ── MOBILE: cards ── */}
+                  <div className="flex flex-col gap-3 sm:hidden">
+                     {receitasFiltradas.map((receita) => {
+                        const status = getStatusReceita(receita);
+                        return (
+                           <div
+                              key={receita.id}
+                              className="bg-white rounded-xl shadow-sm border border-gray-100 p-4"
+                           >
+                              {/* Linha 1: descrição + valor */}
+                              <div className="flex items-start justify-between mb-2">
+                                 <div className="flex-1 min-w-0 pr-2">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">
+                                       {receita.descricao}
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
                                        {formatarData(receita.data_recebimento)}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                       {status === "recebida" ? (
-                                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                                             <span>Recebida</span>
-                                          </span>
-                                       ) : (
-                                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                                             <span>A receber</span>
-                                          </span>
-                                       )}
-                                    </td>
-                                    <td className="px-4 py-3 text-right space-x-2">
-                                       <button
-                                          onClick={() => abrirModal(receita)}
-                                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                       >
-                                          Editar
-                                       </button>
-                                       <button
-                                          onClick={() =>
-                                             excluirReceita(receita)
-                                          }
-                                          className="text-red-500 hover:text-red-700 text-sm font-medium"
-                                       >
-                                          Excluir
-                                       </button>
-                                    </td>
-                                 </tr>
-                              );
-                           })}
-                        </tbody>
-                     </table>
+                                    </p>
+                                 </div>
+                                 <p className="text-base font-bold text-green-600 whitespace-nowrap">
+                                    {formatarValor(receita.valor)}
+                                 </p>
+                              </div>
+
+                              {/* Linha 2: badges + ações */}
+                              <div className="flex items-center justify-between mt-1">
+                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                    {/* Status */}
+                                    {status === "recebida" ? (
+                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                                          Recebida
+                                       </span>
+                                    ) : (
+                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                          <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                                          A receber
+                                       </span>
+                                    )}
+                                    {/* Recorrente */}
+                                    {receita.recorrente && (
+                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                                          🔄 Recorrente
+                                       </span>
+                                    )}
+                                    {/* Categoria */}
+                                    {receita.categoria_nome && (
+                                       <span className="text-xs text-gray-400">
+                                          {receita.categoria_nome}
+                                       </span>
+                                    )}
+                                 </div>
+
+                                 {/* Ações */}
+                                 <div className="flex gap-3 ml-2">
+                                    <button
+                                       onClick={() => abrirModal(receita)}
+                                       className="text-blue-600 text-xs font-medium"
+                                    >
+                                       Editar
+                                    </button>
+                                    <button
+                                       onClick={() => excluirReceita(receita)}
+                                       className="text-red-500 text-xs font-medium"
+                                    >
+                                       Excluir
+                                    </button>
+                                 </div>
+                              </div>
+                           </div>
+                        );
+                     })}
                   </div>
-               </div>
+
+                  {/* ── DESKTOP: tabela ── */}
+                  <div className="hidden sm:block bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                     <div className="overflow-x-auto">
+                        <table className="w-full">
+                           <thead className="bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Descrição
+                                 </th>
+                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Categoria
+                                 </th>
+                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Tipo Pgto
+                                 </th>
+                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Valor
+                                 </th>
+                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Data
+                                 </th>
+                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Status
+                                 </th>
+                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                    Ações
+                                 </th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-gray-100">
+                              {receitasFiltradas.map((receita) => {
+                                 const status = getStatusReceita(receita);
+                                 return (
+                                    <tr
+                                       key={receita.id}
+                                       className="hover:bg-gray-50 transition-colors"
+                                    >
+                                       <td className="px-4 py-3">
+                                          <div className="text-sm font-medium text-gray-900">
+                                             {receita.descricao}
+                                          </div>
+                                          {receita.recorrente && (
+                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 mt-0.5">
+                                                🔄 Recorrente
+                                             </span>
+                                          )}
+                                       </td>
+                                       <td className="px-4 py-3 text-sm text-gray-600">
+                                          {receita.categoria_nome || "—"}
+                                       </td>
+                                       <td className="px-4 py-3 text-sm text-gray-600">
+                                          {receita.tipo_pagamento_nome || "—"}
+                                       </td>
+                                       <td className="px-4 py-3 text-sm font-semibold text-green-600">
+                                          {formatarValor(receita.valor)}
+                                       </td>
+                                       <td className="px-4 py-3 text-sm text-gray-600">
+                                          {formatarData(
+                                             receita.data_recebimento,
+                                          )}
+                                       </td>
+                                       <td className="px-4 py-3">
+                                          {status === "recebida" ? (
+                                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                                <span>Recebida</span>
+                                             </span>
+                                          ) : (
+                                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                                                <span>A receber</span>
+                                             </span>
+                                          )}
+                                       </td>
+                                       <td className="px-4 py-3 text-right space-x-2">
+                                          <button
+                                             onClick={() => abrirModal(receita)}
+                                             className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                          >
+                                             Editar
+                                          </button>
+                                          <button
+                                             onClick={() =>
+                                                excluirReceita(receita)
+                                             }
+                                             className="text-red-500 hover:text-red-700 text-sm font-medium"
+                                          >
+                                             Excluir
+                                          </button>
+                                       </td>
+                                    </tr>
+                                 );
+                              })}
+                           </tbody>
+                        </table>
+                     </div>
+                  </div>
+               </>
             )}
          </div>
 

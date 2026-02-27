@@ -1,33 +1,36 @@
 import api from "./api";
 
+export type TipoDespesa = "variavel" | "fixa" | "assinatura";
+
 export interface Despesa {
    id: number;
    mesa_id: number;
-   mesa_nome?: string;
    descricao: string;
-   valor_provisionado: number;
-   valor_real?: number;
+   tipo: TipoDespesa;
+   valor_provisionado: number | string;
+   valor_real: number | string | null;
    data_vencimento: string;
-   data_pagamento?: string;
-   categoria_id?: number;
-   categoria_nome?: string;
-   tipo_pagamento_id?: number;
-   tipo_pagamento_nome?: string;
-   cartao_id?: number;
-   cartao_nome?: string;
-   paga: boolean;
-   recorrente: boolean;
+   data_pagamento: string | null;
+   data_cancelamento: string | null;
+   paga: boolean | number;
+   recorrente: boolean | number;
    parcelas: number;
    parcela_atual: number;
    parcela_grupo_id: string;
-   comprovante?: string;
-   ativa: boolean;
-   created_at?: string;
+   categoria_id: number | null;
+   categoria_nome: string | null;
+   tipo_pagamento_id: number | null;
+   tipo_pagamento_nome: string | null;
+   cartao_id: number | null;
+   cartao_nome: string | null;
+   comprovante: string | null;
+   ativa: boolean | number;
 }
 
 export interface DespesaCreate {
    mesa_id: number;
    descricao: string;
+   tipo: TipoDespesa;
    valor_provisionado: number;
    data_vencimento: string;
    categoria_id?: number;
@@ -37,138 +40,96 @@ export interface DespesaCreate {
    parcelas?: number;
 }
 
-export interface MarcarPagaData {
-   mesa_id: number;
-   valor_real?: number;
-   data_pagamento: string;
-   comprovante?: File;
-}
-
 const despesaService = {
-   listar: async (mesaId: number, incluirInativas: boolean = false) => {
-      const params = new URLSearchParams();
-      params.append("mesa_id", mesaId.toString());
-      if (incluirInativas) params.append("incluirInativas", "true");
-
-      const response = await api.get(`/despesas?${params.toString()}`);
-      return response.data.despesas as Despesa[];
+   async listar(mesaId: number, mes?: string): Promise<Despesa[]> {
+      const params: Record<string, string> = { mesa_id: String(mesaId) };
+      if (mes) params.mes = mes;
+      const res = await api.get("/despesas", { params });
+      return res.data.despesas;
    },
 
-   buscar: async (id: number, mesaId: number) => {
-      const response = await api.get(`/despesas/${id}?mesa_id=${mesaId}`);
-      return response.data.despesa as Despesa;
+   async criar(data: DespesaCreate): Promise<void> {
+      await api.post("/despesas", data);
    },
 
-   buscarPorGrupo: async (parcelaGrupoId: string, mesaId: number) => {
-      const response = await api.get(
-         `/despesas/grupo/${parcelaGrupoId}?mesa_id=${mesaId}`,
-      );
-      return response.data.despesas as Despesa[];
+   async atualizar(id: number, data: Partial<DespesaCreate>): Promise<void> {
+      await api.put(`/despesas/${id}`, data);
    },
 
-   criar: async (despesa: DespesaCreate) => {
-      const response = await api.post("/despesas", despesa);
-      return response.data;
-   },
+   // Suporta comprovante via FormData quando arquivo for enviado
+   async marcarComoPaga(
+      id: number,
+      mesaId: number,
+      valorReal?: number,
+      arquivo?: File | null,
+   ): Promise<void> {
+      // Data LOCAL para evitar bug de fuso horário (toISOString usa UTC)
+      const d = new Date();
+      const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-   atualizar: async (id: number, despesa: Omit<DespesaCreate, "parcelas">) => {
-      const response = await api.put(`/despesas/${id}`, despesa);
-      return response.data;
-   },
-
-   marcarComoPaga: async (id: number, data: MarcarPagaData) => {
-      const formData = new FormData();
-      formData.append("mesa_id", data.mesa_id.toString());
-      formData.append("data_pagamento", data.data_pagamento);
-      if (data.valor_real)
-         formData.append("valor_real", data.valor_real.toString());
-      if (data.comprovante) formData.append("comprovante", data.comprovante);
-
-      const response = await api.patch(`/despesas/${id}/pagar`, formData, {
-         headers: { "Content-Type": "multipart/form-data" },
-      });
-      return response.data;
-   },
-
-   inativar: async (id: number, mesaId: number) => {
-      const response = await api.delete(`/despesas/${id}?mesa_id=${mesaId}`);
-      return response.data;
-   },
-
-   inativarGrupo: async (parcelaGrupoId: string, mesaId: number) => {
-      const response = await api.patch(
-         `/despesas/grupo/${parcelaGrupoId}/inativar?mesa_id=${mesaId}`,
-      );
-      return response.data;
-   },
-
-   reativar: async (id: number, mesaId: number) => {
-      const response = await api.patch(
-         `/despesas/${id}/reativar?mesa_id=${mesaId}`,
-      );
-      return response.data;
-   },
-
-   uploadComprovante: async (id: number, mesaId: number, arquivo: File) => {
-      const formData = new FormData();
-      formData.append("mesa_id", mesaId.toString());
-      formData.append("comprovante", arquivo);
-
-      const response = await api.post(`/despesas/${id}/comprovante`, formData, {
-         headers: { "Content-Type": "multipart/form-data" },
-      });
-      return response.data;
-   },
-
-   baixarComprovante: async (id: number, mesaId: number) => {
-      const response = await api.get(
-         `/despesas/${id}/comprovante/download?mesa_id=${mesaId}`,
-         {
-            responseType: "blob",
-         },
-      );
-      return response.data;
-   },
-
-   excluirComprovante: async (id: number, mesaId: number) => {
-      const response = await api.delete(
-         `/despesas/${id}/comprovante?mesa_id=${mesaId}`,
-      );
-      return response.data;
-   },
-
-   listarTodas: async (incluirInativas: boolean = false) => {
-      // Importar mesaService no topo do arquivo
-      const mesaService = (await import("./mesaService")).default;
-
-      // Primeiro busca todas as mesas do usuário
-      const mesas = await mesaService.listar();
-
-      // Depois busca despesas de cada mesa
-      const todasDespesas: Despesa[] = [];
-
-      for (const mesa of mesas) {
-         const params = new URLSearchParams();
-         params.append("mesa_id", mesa.id.toString());
-         if (incluirInativas) params.append("incluirInativas", "true");
-
-         const response = await api.get(`/despesas?${params.toString()}`);
-
-         // Adiciona o nome da mesa em cada despesa
-         const despesasComMesa = response.data.despesas.map((d: Despesa) => ({
-            ...d,
-            mesa_nome: mesa.nome,
-         }));
-
-         todasDespesas.push(...despesasComMesa);
+      if (arquivo) {
+         const form = new FormData();
+         form.append("mesa_id", String(mesaId));
+         form.append("data_pagamento", hoje);
+         if (valorReal !== undefined)
+            form.append("valor_real", String(valorReal));
+         form.append("comprovante", arquivo);
+         await api.patch(`/despesas/${id}/pagar`, form, {
+            headers: { "Content-Type": "multipart/form-data" },
+         });
+      } else {
+         await api.patch(`/despesas/${id}/pagar`, {
+            mesa_id: mesaId,
+            data_pagamento: hoje,
+            ...(valorReal !== undefined && { valor_real: valorReal }),
+         });
       }
+   },
 
-      // Ordena por data de vencimento (mais recente primeiro)
-      return todasDespesas.sort(
-         (a, b) =>
-            new Date(b.data_vencimento).getTime() -
-            new Date(a.data_vencimento).getTime(),
-      );
+   async desmarcarPagamento(id: number, mesaId: number): Promise<void> {
+      await api.patch(`/despesas/${id}/desfazer-pagamento`, {
+         mesa_id: mesaId,
+      });
+   },
+
+   async getComprovanteUrl(id: number, mesaId: number): Promise<string> {
+      const res = await api.get(`/despesas/${id}/comprovante/download`, {
+         params: { mesa_id: mesaId },
+         responseType: "blob",
+      });
+      return URL.createObjectURL(res.data);
+   },
+
+   // mes formato: "YYYY-MM" — despesa para de aparecer a partir deste mês (inclusive)
+   async cancelarRecorrencia(
+      id: number,
+      mesaId: number,
+      mes: string,
+   ): Promise<void> {
+      await api.patch(`/despesas/${id}/cancelar-recorrencia`, {
+         mesa_id: mesaId,
+         mes,
+      });
+   },
+
+   async removerCancelamento(id: number, mesaId: number): Promise<void> {
+      await api.patch(`/despesas/${id}/remover-cancelamento`, {
+         mesa_id: mesaId,
+      });
+   },
+
+   async inativar(id: number, mesaId: number): Promise<void> {
+      await api.delete(`/despesas/${id}`, { params: { mesa_id: mesaId } });
+   },
+
+   async buscarParcelas(
+      parcelaGrupoId: string,
+      mesaId: number,
+   ): Promise<Despesa[]> {
+      const res = await api.get(`/despesas/grupo/${parcelaGrupoId}`, {
+         params: { mesa_id: mesaId },
+      });
+      return res.data.despesas;
    },
 };
 

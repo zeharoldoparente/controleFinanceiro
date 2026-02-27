@@ -30,41 +30,35 @@ router.use(authMiddleware);
  *             properties:
  *               mesa_id:
  *                 type: integer
- *                 description: ID da mesa
  *                 example: 2
  *               descricao:
  *                 type: string
- *                 description: Descrição da despesa
  *                 example: Notebook Dell
+ *               tipo:
+ *                 type: string
+ *                 enum: [variavel, fixa, assinatura]
+ *                 example: variavel
  *               valor_provisionado:
  *                 type: number
- *                 format: float
- *                 description: Valor total da despesa
  *                 example: 3000.00
  *               data_vencimento:
  *                 type: string
  *                 format: date
- *                 description: Data de vencimento (primeira parcela se parcelado)
  *                 example: 2026-03-10
  *               categoria_id:
  *                 type: integer
- *                 description: ID da categoria (opcional)
  *                 example: 1
  *               tipo_pagamento_id:
  *                 type: integer
- *                 description: ID do tipo de pagamento (opcional)
  *                 example: 1
  *               cartao_id:
  *                 type: integer
- *                 description: ID do cartão (obrigatório se tipo for Cartão)
  *                 example: 1
  *               recorrente:
  *                 type: boolean
- *                 description: Se a despesa é recorrente
  *                 example: false
  *               parcelas:
  *                 type: integer
- *                 description: Número de parcelas (divide automaticamente)
  *                 example: 3
  *     responses:
  *       201:
@@ -81,7 +75,7 @@ router.post("/", DespesaController.create);
  * /api/despesas:
  *   get:
  *     summary: Listar despesas de uma mesa
- *     description: Retorna todas as despesas de uma mesa específica
+ *     description: Retorna despesas filtradas por mês. Despesas recorrentes aparecem em todos os meses a partir da criação.
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -91,27 +85,90 @@ router.post("/", DespesaController.create);
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID da mesa
  *         example: 2
  *       - in: query
- *         name: incluirInativas
+ *         name: mes
  *         schema:
  *           type: string
- *           enum: [true, false]
- *         description: Incluir despesas inativas (opcional, padrão false)
- *         example: true
+ *         description: Mês no formato YYYY-MM (padrão = mês atual)
+ *         example: 2026-03
  *     responses:
  *       200:
  *         description: Lista de despesas
  */
 router.get("/", DespesaController.list);
 
+// ──────────────────────────────────────────────────────────────────────────────
+// ATENÇÃO: rotas específicas com sufixo DEVEM vir ANTES de /:id
+// para o Express não confundir o sufixo com o parâmetro id
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/despesas/grupo/{parcela_grupo_id}:
+ *   get:
+ *     summary: Buscar todas as parcelas de um grupo
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: parcela_grupo_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: 550e8400-e29b-41d4-a716-446655440000
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Lista de parcelas do grupo
+ */
+router.get("/grupo/:parcela_grupo_id", DespesaController.getByParcelaGrupo);
+
+/**
+ * @swagger
+ * /api/despesas/grupo/{parcela_grupo_id}/inativar:
+ *   patch:
+ *     summary: Inativar todas as parcelas de um grupo
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: parcela_grupo_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: 550e8400-e29b-41d4-a716-446655440000
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Todas as parcelas foram inativadas
+ */
+router.patch(
+   "/grupo/:parcela_grupo_id/inativar",
+   DespesaController.inativarGrupo,
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rotas com /:id — específicas com sufixo ANTES da genérica /:id
+// ──────────────────────────────────────────────────────────────────────────────
+
 /**
  * @swagger
  * /api/despesas/{id}:
  *   get:
  *     summary: Buscar despesa específica
- *     description: Retorna detalhes de uma despesa
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -138,39 +195,9 @@ router.get("/:id", DespesaController.show);
 
 /**
  * @swagger
- * /api/despesas/grupo/{parcela_grupo_id}:
- *   get:
- *     summary: Buscar todas as parcelas de um grupo
- *     description: Retorna todas as parcelas vinculadas a um parcela_grupo_id
- *     tags: [Despesas]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: parcela_grupo_id
- *         required: true
- *         schema:
- *           type: string
- *         description: UUID do grupo de parcelas
- *         example: 550e8400-e29b-41d4-a716-446655440000
- *       - in: query
- *         name: mesa_id
- *         required: true
- *         schema:
- *           type: integer
- *         example: 2
- *     responses:
- *       200:
- *         description: Lista de parcelas do grupo
- */
-router.get("/grupo/:parcela_grupo_id", DespesaController.getByParcelaGrupo);
-
-/**
- * @swagger
  * /api/despesas/{id}:
  *   put:
  *     summary: Atualizar despesa
- *     description: Atualiza informações de uma despesa (não altera parcelamento)
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -199,6 +226,10 @@ router.get("/grupo/:parcela_grupo_id", DespesaController.getByParcelaGrupo);
  *               descricao:
  *                 type: string
  *                 example: Conta de Luz (Atualizada)
+ *               tipo:
+ *                 type: string
+ *                 enum: [variavel, fixa, assinatura]
+ *                 example: fixa
  *               valor_provisionado:
  *                 type: number
  *                 example: 160.00
@@ -229,7 +260,7 @@ router.put("/:id", DespesaController.update);
  * /api/despesas/{id}/pagar:
  *   patch:
  *     summary: Marcar despesa como paga
- *     description: Marca uma despesa como paga, com opção de upload de comprovante
+ *     description: Marca uma despesa como paga com valor real e comprovante opcional
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -248,7 +279,6 @@ router.put("/:id", DespesaController.update);
  *             type: object
  *             required:
  *               - mesa_id
- *               - data_pagamento
  *             properties:
  *               mesa_id:
  *                 type: integer
@@ -275,10 +305,128 @@ router.patch(
 
 /**
  * @swagger
+ * /api/despesas/{id}/desfazer-pagamento:
+ *   patch:
+ *     summary: Desfazer pagamento de uma despesa
+ *     description: Remove o pagamento, valor real e comprovante, retornando a despesa ao status anterior
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - mesa_id
+ *             properties:
+ *               mesa_id:
+ *                 type: integer
+ *                 example: 2
+ *     responses:
+ *       200:
+ *         description: Pagamento desfeito com sucesso
+ *       400:
+ *         description: Despesa não está marcada como paga
+ *       404:
+ *         description: Despesa não encontrada
+ */
+router.patch("/:id/desfazer-pagamento", DespesaController.desmarcarPagamento);
+
+/**
+ * @swagger
+ * /api/despesas/{id}/cancelar-recorrencia:
+ *   patch:
+ *     summary: Cancelar recorrência a partir de um mês
+ *     description: Define data_cancelamento para que a despesa fixa/assinatura pare de aparecer a partir do mês informado (inclusive)
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - mesa_id
+ *               - mes
+ *             properties:
+ *               mesa_id:
+ *                 type: integer
+ *                 example: 2
+ *               mes:
+ *                 type: string
+ *                 description: Mês a partir do qual a recorrência para (YYYY-MM)
+ *                 example: "2026-08"
+ *     responses:
+ *       200:
+ *         description: Recorrência cancelada com sucesso
+ *       400:
+ *         description: Despesa não é recorrente ou mês inválido
+ */
+router.patch(
+   "/:id/cancelar-recorrencia",
+   DespesaController.cancelarRecorrencia,
+);
+
+/**
+ * @swagger
+ * /api/despesas/{id}/remover-cancelamento:
+ *   patch:
+ *     summary: Remover cancelamento de recorrência
+ *     description: Remove a data_cancelamento fazendo a despesa voltar a aparecer em todos os meses
+ *     tags: [Despesas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - mesa_id
+ *             properties:
+ *               mesa_id:
+ *                 type: integer
+ *                 example: 2
+ *     responses:
+ *       200:
+ *         description: Cancelamento removido com sucesso
+ */
+router.patch(
+   "/:id/remover-cancelamento",
+   DespesaController.removerCancelamento,
+);
+
+/**
+ * @swagger
  * /api/despesas/{id}/reativar:
  *   patch:
- *     summary: Reativar despesa
- *     description: Reativa uma despesa que foi inativada
+ *     summary: Reativar despesa inativada
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -303,41 +451,9 @@ router.patch("/:id/reativar", DespesaController.reativar);
 
 /**
  * @swagger
- * /api/despesas/grupo/{parcela_grupo_id}/inativar:
- *   patch:
- *     summary: Inativar todas as parcelas de um grupo
- *     description: Inativa todas as despesas vinculadas a um parcela_grupo_id
- *     tags: [Despesas]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: parcela_grupo_id
- *         required: true
- *         schema:
- *           type: string
- *         example: 550e8400-e29b-41d4-a716-446655440000
- *       - in: query
- *         name: mesa_id
- *         required: true
- *         schema:
- *           type: integer
- *         example: 2
- *     responses:
- *       200:
- *         description: Todas as parcelas foram inativadas
- */
-router.patch(
-   "/grupo/:parcela_grupo_id/inativar",
-   DespesaController.inativarGrupo,
-);
-
-/**
- * @swagger
  * /api/despesas/{id}/comprovante:
  *   post:
  *     summary: Upload/Atualizar comprovante
- *     description: Faz upload ou substitui o comprovante de uma despesa
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -379,7 +495,6 @@ router.post(
  * /api/despesas/{id}/comprovante/download:
  *   get:
  *     summary: Visualizar/Baixar comprovante
- *     description: Retorna o arquivo de imagem do comprovante
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -407,7 +522,6 @@ router.get("/:id/comprovante/download", DespesaController.getComprovante);
  * /api/despesas/{id}/comprovante:
  *   delete:
  *     summary: Excluir comprovante
- *     description: Remove o comprovante de uma despesa
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
@@ -434,8 +548,7 @@ router.delete("/:id/comprovante", DespesaController.deleteComprovante);
  * @swagger
  * /api/despesas/{id}:
  *   delete:
- *     summary: Inativar despesa
- *     description: Inativa uma despesa (soft delete)
+ *     summary: Inativar despesa (soft delete)
  *     tags: [Despesas]
  *     security:
  *       - bearerAuth: []
