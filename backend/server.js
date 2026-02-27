@@ -62,6 +62,7 @@ const notificacaoRoutes = require("./src/routes/notificacaoRoutes");
 const bandeiraRoutes = require("./src/routes/bandeiraRoutes");
 const tipoPagamentoRoutes = require("./src/routes/tipoPagamentoRoutes");
 const mesaRoutes = require("./src/routes/mesaRoutes");
+const dashboardRoutes = require("./src/routes/dashboardRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/categorias", categoriaRoutes);
@@ -74,6 +75,7 @@ app.use("/api/notificacoes", notificacaoRoutes);
 app.use("/api/bandeiras", bandeiraRoutes);
 app.use("/api/tipos-pagamento", tipoPagamentoRoutes);
 app.use("/api/mesa", mesaRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
    res.json({ message: "API do Controle Financeiro funcionando!" });
