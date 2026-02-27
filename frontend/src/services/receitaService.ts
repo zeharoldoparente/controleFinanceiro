@@ -27,10 +27,16 @@ export interface ReceitaCreate {
 }
 
 const receitaService = {
-   listar: async (mesaId: number, incluirInativas: boolean = false) => {
+   /**
+    * Lista receitas de uma mesa filtrando por mês.
+    * Recorrentes aparecem automaticamente a partir do mês de criação.
+    * @param mesaId ID da mesa
+    * @param mes formato "YYYY-MM" (ex: "2026-03"). Se omitido, usa o mês atual.
+    */
+   listar: async (mesaId: number, mes?: string) => {
       const params = new URLSearchParams();
       params.append("mesa_id", mesaId.toString());
-      if (incluirInativas) params.append("incluirInativas", "true");
+      if (mes) params.append("mes", mes);
 
       const response = await api.get(`/receitas?${params.toString()}`);
       return response.data.receitas as Receita[];
@@ -63,24 +69,21 @@ const receitaService = {
       return response.data;
    },
 
-   listarTodas: async (incluirInativas: boolean = false) => {
-      // Importar mesaService no topo do arquivo
+   /**
+    * Lista receitas de todas as mesas do usuário, filtrando por mês.
+    */
+   listarTodas: async (mes?: string) => {
       const mesaService = (await import("./mesaService")).default;
-
-      // Primeiro busca todas as mesas do usuário
       const mesas = await mesaService.listar();
-
-      // Depois busca receitas de cada mesa
       const todasReceitas: Receita[] = [];
 
       for (const mesa of mesas) {
          const params = new URLSearchParams();
          params.append("mesa_id", mesa.id.toString());
-         if (incluirInativas) params.append("incluirInativas", "true");
+         if (mes) params.append("mes", mes);
 
          const response = await api.get(`/receitas?${params.toString()}`);
 
-         // Adiciona o nome da mesa em cada receita
          const receitasComMesa = response.data.receitas.map((r: Receita) => ({
             ...r,
             mesa_nome: mesa.nome,
@@ -89,7 +92,6 @@ const receitaService = {
          todasReceitas.push(...receitasComMesa);
       }
 
-      // Ordena por data (mais recente primeiro)
       return todasReceitas.sort(
          (a, b) =>
             new Date(b.data_recebimento).getTime() -

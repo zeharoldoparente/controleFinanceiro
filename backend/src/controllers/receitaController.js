@@ -30,7 +30,6 @@ class ReceitaController {
                .json({ error: "Você não tem acesso a esta mesa" });
          }
 
-         // Validar tipo de pagamento (se fornecido)
          if (tipo_pagamento_id) {
             const tipoPagamento =
                await TipoPagamento.findById(tipo_pagamento_id);
@@ -41,7 +40,6 @@ class ReceitaController {
             }
          }
 
-         // Validar categoria (se fornecida)
          if (categoria_id) {
             const categoria = await Categoria.findById(categoria_id);
             if (!categoria || !categoria.ativa) {
@@ -78,7 +76,8 @@ class ReceitaController {
 
    static async list(req, res) {
       try {
-         const { mesa_id, incluirInativas } = req.query;
+         // mes no formato "YYYY-MM" (ex: "2026-03")
+         const { mesa_id, mes } = req.query;
          const userId = req.userId;
 
          if (!mesa_id) {
@@ -92,9 +91,12 @@ class ReceitaController {
                .json({ error: "Você não tem acesso a esta mesa" });
          }
 
-         const receitas = await Receita.findByMesaId(
+         // Se não passou mês, usa o mês atual
+         const mesFiltro = mes || new Date().toISOString().slice(0, 7);
+
+         const receitas = await Receita.findByMesaIdFiltrado(
             mesa_id,
-            incluirInativas === "true",
+            mesFiltro,
          );
 
          res.json({ receitas });
@@ -122,7 +124,6 @@ class ReceitaController {
          }
 
          const receita = await Receita.findById(id, mesa_id);
-
          if (!receita) {
             return res.status(404).json({ error: "Receita não encontrada" });
          }
@@ -166,7 +167,6 @@ class ReceitaController {
             return res.status(404).json({ error: "Receita não encontrada" });
          }
 
-         // Validar tipo de pagamento (se fornecido)
          if (tipo_pagamento_id) {
             const tipoPagamento =
                await TipoPagamento.findById(tipo_pagamento_id);
@@ -177,7 +177,6 @@ class ReceitaController {
             }
          }
 
-         // Validar categoria (se fornecida)
          if (categoria_id) {
             const categoria = await Categoria.findById(categoria_id);
             if (!categoria || !categoria.ativa) {
@@ -233,7 +232,6 @@ class ReceitaController {
          }
 
          await Receita.inativar(id, mesa_id);
-
          res.json({ message: "Receita inativada com sucesso!" });
       } catch (error) {
          console.error(error);
@@ -264,7 +262,6 @@ class ReceitaController {
          }
 
          await Receita.reativar(id, mesa_id);
-
          res.json({ message: "Receita reativada com sucesso!" });
       } catch (error) {
          console.error(error);
@@ -295,7 +292,6 @@ class ReceitaController {
          }
 
          await Receita.delete(id, mesa_id);
-
          res.json({ message: "Receita deletada com sucesso!" });
       } catch (error) {
          console.error(error);

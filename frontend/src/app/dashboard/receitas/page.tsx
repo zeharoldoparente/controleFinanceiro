@@ -1,33 +1,78 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import authService from "@/services/authService";
 import receitaService, {
    Receita,
    ReceitaCreate,
 } from "@/services/receitaService";
-import mesaService from "@/services/mesaService";
 import categoriaService, { Categoria } from "@/services/categoriaService";
 import tipoPagamentoService, {
    TipoPagamento,
 } from "@/services/tipoPagamentoService";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { useMesa } from "@/contexts/MesaContext";
 import { isApiError } from "@/types";
+
+// Gera lista de meses (12 meses para trás + 3 para frente)
+function gerarMeses(): { valor: string; label: string }[] {
+   const meses = [];
+   const hoje = new Date();
+   for (let i = -12; i <= 3; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+      const ano = d.getFullYear();
+      const mes = String(d.getMonth() + 1).padStart(2, "0");
+      const nomesMes = [
+         "Janeiro",
+         "Fevereiro",
+         "Março",
+         "Abril",
+         "Maio",
+         "Junho",
+         "Julho",
+         "Agosto",
+         "Setembro",
+         "Outubro",
+         "Novembro",
+         "Dezembro",
+      ];
+      meses.push({
+         valor: `${ano}-${mes}`,
+         label: `${nomesMes[d.getMonth()]}/${ano}`,
+      });
+   }
+   return meses;
+}
+
+function mesAtual(): string {
+   const d = new Date();
+   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 export default function ReceitasPage() {
    const router = useRouter();
+   const { mesaSelecionada, carregando: mesaCarregando } = useMesa();
+
    const [receitas, setReceitas] = useState<Receita[]>([]);
    const [categorias, setCategorias] = useState<Categoria[]>([]);
    const [tiposPagamento, setTiposPagamento] = useState<TipoPagamento[]>([]);
-   const [mesas, setMesas] = useState<any[]>([]);
    const [loading, setLoading] = useState(true);
-   const [mostrarInativas, setMostrarInativas] = useState(false);
+
+   // Filtros
+   const [mesSelecionado, setMesSelecionado] = useState(mesAtual());
+   const [filtroStatus, setFiltroStatus] = useState<
+      "todas" | "a_receber" | "recebida"
+   >("todas");
+   const [filtroRecorrente, setFiltroRecorrente] = useState<
+      "todas" | "sim" | "nao"
+   >("todas");
+
+   // Modal
    const [modalAberto, setModalAberto] = useState(false);
    const [editando, setEditando] = useState<Receita | null>(null);
 
    // Campos do formulário
-   const [mesaId, setMesaId] = useState<number | "">("");
    const [descricao, setDescricao] = useState("");
    const [valor, setValor] = useState("");
    const [dataRecebimento, setDataRecebimento] = useState("");
@@ -38,35 +83,38 @@ export default function ReceitasPage() {
    const [erro, setErro] = useState("");
    const [sucesso, setSucesso] = useState("");
 
-   useEffect(() => {
-      const checkAuth = () => {
-         if (!authService.isAuthenticated()) {
-            router.push("/login");
-            return false;
-         }
-         return true;
-      };
+   const meses = useMemo(() => gerarMeses(), []);
 
-      if (checkAuth()) {
-         carregarDados();
+   useEffect(() => {
+      if (!authService.isAuthenticated()) {
+         router.push("/login");
+         return;
       }
-   }, [router, mostrarInativas]);
+      // Aguarda o MesaContext terminar de carregar antes de agir
+      if (mesaCarregando) return;
+
+      if (mesaSelecionada) {
+         carregarDados();
+      } else {
+         setLoading(false);
+      }
+   }, [router, mesaSelecionada, mesaCarregando, mesSelecionado]);
 
    const carregarDados = async () => {
+      if (!mesaSelecionada) {
+         setLoading(false);
+         return;
+      }
       try {
          setLoading(true);
-         const [receitasData, categoriasData, tiposData, mesasData] =
-            await Promise.all([
-               receitaService.listarTodas(mostrarInativas),
-               categoriaService.listar("receita", false),
-               tipoPagamentoService.listar(false),
-               mesaService.listar(),
-            ]);
-
+         const [receitasData, categoriasData, tiposData] = await Promise.all([
+            receitaService.listar(mesaSelecionada.id, mesSelecionado),
+            categoriaService.listar("receita", false),
+            tipoPagamentoService.listar(false),
+         ]);
          setReceitas(receitasData);
          setCategorias(categoriasData);
          setTiposPagamento(tiposData);
-         setMesas(mesasData);
       } catch (error) {
          console.error("Erro ao carregar dados:", error);
          setErro("Erro ao carregar dados");
@@ -75,10 +123,50 @@ export default function ReceitasPage() {
       }
    };
 
+   // Filtragem no frontend apenas por status + recorrente (mês já vem filtrado do backend)
+   const receitasFiltradas = useMemo(() => {
+      return receitas.filter((r) => {
+         // Filtro por status
+         const hoje = new Date().toISOString().split("T")[0];
+         const dataStr = r.data_recebimento.substring(0, 10); // garante "YYYY-MM-DD"
+         const recebida = dataStr <= hoje;
+         if (filtroStatus === "recebida" && !recebida) return false;
+         if (filtroStatus === "a_receber" && recebida) return false;
+
+         // Filtro por recorrente
+         if (filtroRecorrente === "sim" && !r.recorrente) return false;
+         if (filtroRecorrente === "nao" && r.recorrente) return false;
+
+         return true;
+      });
+   }, [receitas, filtroStatus, filtroRecorrente]);
+
+   // Totais do mês filtrado
+   const totalRecebido = useMemo(
+      () =>
+         receitasFiltradas
+            .filter(
+               (r) =>
+                  r.data_recebimento <= new Date().toISOString().split("T")[0],
+            )
+            .reduce((acc, r) => acc + r.valor, 0),
+      [receitasFiltradas],
+   );
+
+   const totalAReceber = useMemo(
+      () =>
+         receitasFiltradas
+            .filter(
+               (r) =>
+                  r.data_recebimento > new Date().toISOString().split("T")[0],
+            )
+            .reduce((acc, r) => acc + r.valor, 0),
+      [receitasFiltradas],
+   );
+
    const abrirModal = (receita?: Receita) => {
       if (receita) {
          setEditando(receita);
-         setMesaId(receita.mesa_id);
          setDescricao(receita.descricao);
          setValor(receita.valor.toString());
          setDataRecebimento(receita.data_recebimento);
@@ -87,10 +175,10 @@ export default function ReceitasPage() {
          setRecorrente(receita.recorrente);
       } else {
          setEditando(null);
-         setMesaId(mesas.length === 1 ? mesas[0].id : "");
          setDescricao("");
          setValor("");
-         setDataRecebimento("");
+         // Pré-preenche a data com o primeiro dia do mês selecionado
+         setDataRecebimento(`${mesSelecionado}-01`);
          setCategoriaId("");
          setTipoPagamentoId("");
          setRecorrente(false);
@@ -102,7 +190,6 @@ export default function ReceitasPage() {
    const fecharModal = () => {
       setModalAberto(false);
       setEditando(null);
-      setMesaId("");
       setDescricao("");
       setValor("");
       setDataRecebimento("");
@@ -115,21 +202,18 @@ export default function ReceitasPage() {
    const salvarReceita = async (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!mesaId) {
-         setErro("Selecione uma mesa");
+      if (!mesaSelecionada) {
+         setErro("Nenhuma mesa selecionada");
          return;
       }
-
       if (!descricao.trim()) {
          setErro("A descrição é obrigatória");
          return;
       }
-
       if (!valor || parseFloat(valor) <= 0) {
          setErro("O valor deve ser maior que zero");
          return;
       }
-
       if (!dataRecebimento) {
          setErro("A data de recebimento é obrigatória");
          return;
@@ -137,7 +221,7 @@ export default function ReceitasPage() {
 
       try {
          const receitaData: ReceitaCreate = {
-            mesa_id: Number(mesaId),
+            mesa_id: mesaSelecionada.id,
             descricao,
             valor: parseFloat(valor),
             data_recebimento: dataRecebimento,
@@ -158,7 +242,6 @@ export default function ReceitasPage() {
 
          fecharModal();
          carregarDados();
-
          setTimeout(() => setSucesso(""), 3000);
       } catch (error) {
          if (isApiError(error)) {
@@ -169,32 +252,35 @@ export default function ReceitasPage() {
       }
    };
 
-   const toggleAtiva = async (receita: Receita) => {
+   const excluirReceita = async (receita: Receita) => {
+      if (!confirm(`Deseja excluir a receita "${receita.descricao}"?`)) return;
       try {
-         if (receita.ativa) {
-            await receitaService.inativar(receita.id, receita.mesa_id);
-            setSucesso("Receita inativada com sucesso!");
-         } else {
-            await receitaService.reativar(receita.id, receita.mesa_id);
-            setSucesso("Receita reativada com sucesso!");
-         }
-
+         await receitaService.inativar(receita.id, receita.mesa_id);
+         setSucesso("Receita excluída com sucesso!");
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
-      } catch (error) {
-         setErro("Erro ao alterar status da receita");
+      } catch {
+         setErro("Erro ao excluir receita");
       }
    };
 
-   const formatarValor = (valor: number): string => {
-      return new Intl.NumberFormat("pt-BR", {
+   const formatarValor = (valor: number) =>
+      new Intl.NumberFormat("pt-BR", {
          style: "currency",
          currency: "BRL",
       }).format(valor);
+
+   // MySQL pode retornar "2026-02-01T00:00:00.000Z" ou "2026-02-01"
+   // substring(0,10) garante que pegamos sempre "YYYY-MM-DD"
+   const formatarData = (data: string) => {
+      const dataLimpa = data.substring(0, 10);
+      const [ano, mes, dia] = dataLimpa.split("-");
+      return `${dia}/${mes}/${ano}`;
    };
 
-   const formatarData = (data: string): string => {
-      return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
+   const getStatusReceita = (receita: Receita) => {
+      const hoje = new Date().toISOString().split("T")[0];
+      return receita.data_recebimento <= hoje ? "recebida" : "a_receber";
    };
 
    if (loading) {
@@ -217,7 +303,10 @@ export default function ReceitasPage() {
                      Receitas
                   </h1>
                   <p className="text-xs md:text-sm text-gray-600 mt-1">
-                     Gerencie suas receitas de todas as mesas
+                     Mesa:{" "}
+                     <span className="font-semibold text-green-600">
+                        {mesaSelecionada?.nome}
+                     </span>
                   </p>
                </div>
 
@@ -248,30 +337,119 @@ export default function ReceitasPage() {
                   {sucesso}
                </div>
             )}
-
             {erro && !modalAberto && (
                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
                   {erro}
                </div>
             )}
 
-            {/* Toggle Inativas */}
-            <div className="flex items-center justify-end">
-               <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                     type="checkbox"
-                     checked={mostrarInativas}
-                     onChange={(e) => setMostrarInativas(e.target.checked)}
-                     className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
-                  />
-                  <span className="text-sm text-gray-600 whitespace-nowrap">
-                     Mostrar inativas
-                  </span>
-               </label>
+            {/* Filtros */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
+               <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Seletor de Mês */}
+                  <div className="flex-1">
+                     <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
+                        Mês
+                     </label>
+                     <select
+                        value={mesSelecionado}
+                        onChange={(e) => setMesSelecionado(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                     >
+                        {meses.map((m) => (
+                           <option key={m.valor} value={m.valor}>
+                              {m.label}
+                           </option>
+                        ))}
+                     </select>
+                  </div>
+
+                  {/* Filtro Status */}
+                  <div className="flex-1">
+                     <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
+                        Status
+                     </label>
+                     <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                        {[
+                           { valor: "todas", label: "Todas" },
+                           { valor: "a_receber", label: "A receber" },
+                           { valor: "recebida", label: "Recebida" },
+                        ].map((op) => (
+                           <button
+                              key={op.valor}
+                              onClick={() =>
+                                 setFiltroStatus(
+                                    op.valor as typeof filtroStatus,
+                                 )
+                              }
+                              className={`flex-1 py-2 text-xs font-medium transition-colors ${
+                                 filtroStatus === op.valor
+                                    ? "bg-green-600 text-white"
+                                    : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                           >
+                              {op.label}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* Filtro Recorrente */}
+                  <div className="flex-1">
+                     <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
+                        Recorrente
+                     </label>
+                     <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                        {[
+                           { valor: "todas", label: "Todas" },
+                           { valor: "sim", label: "Sim" },
+                           { valor: "nao", label: "Não" },
+                        ].map((op) => (
+                           <button
+                              key={op.valor}
+                              onClick={() =>
+                                 setFiltroRecorrente(
+                                    op.valor as typeof filtroRecorrente,
+                                 )
+                              }
+                              className={`flex-1 py-2 text-xs font-medium transition-colors ${
+                                 filtroRecorrente === op.valor
+                                    ? "bg-green-600 text-white"
+                                    : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                           >
+                              {op.label}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+               </div>
             </div>
 
-            {/* Tabela de Receitas */}
-            {receitas.length === 0 ? (
+            {/* Cards de Resumo do Mês */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Recebido no mês</p>
+                  <p className="text-lg font-bold text-green-600">
+                     {formatarValor(totalRecebido)}
+                  </p>
+               </div>
+               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
+                  <p className="text-xs text-gray-500 mb-1">A receber</p>
+                  <p className="text-lg font-bold text-blue-600">
+                     {formatarValor(totalAReceber)}
+                  </p>
+               </div>
+               <div className="col-span-2 md:col-span-1 bg-white rounded-xl shadow-md border border-gray-100 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Total previsto</p>
+                  <p className="text-lg font-bold text-gray-700">
+                     {formatarValor(totalRecebido + totalAReceber)}
+                  </p>
+               </div>
+            </div>
+
+            {/* Lista de Receitas */}
+            {receitasFiltradas.length === 0 ? (
                <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 text-center text-gray-500">
                   <svg
                      className="w-16 h-16 mx-auto mb-4 text-gray-300"
@@ -286,11 +464,11 @@ export default function ReceitasPage() {
                         d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                      />
                   </svg>
-                  <p className="text-base md:text-lg font-medium">
+                  <p className="text-base font-medium">
                      Nenhuma receita encontrada
                   </p>
-                  <p className="text-sm mt-1">
-                     Adicione sua primeira receita para começar
+                  <p className="text-sm mt-1 text-gray-400">
+                     Tente outro mês ou adicione uma nova receita
                   </p>
                </div>
             ) : (
@@ -299,94 +477,91 @@ export default function ReceitasPage() {
                      <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-200">
                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                 Mesa
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                  Descrição
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                  Categoria
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                  Tipo Pgto
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                  Valor
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                  Data
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                  Status
                               </th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                                  Ações
                               </th>
                            </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
-                           {receitas.map((receita) => (
-                              <tr
-                                 key={receita.id}
-                                 className={`hover:bg-gray-50 ${!receita.ativa && "opacity-50"}`}
-                              >
-                                 <td className="px-4 py-3 text-sm text-gray-900">
-                                    {receita.mesa_nome}
-                                 </td>
-                                 <td className="px-4 py-3">
-                                    <div className="text-sm font-medium text-gray-900">
-                                       {receita.descricao}
-                                    </div>
-                                    {receita.recorrente && (
-                                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
-                                          Recorrente
-                                       </span>
-                                    )}
-                                 </td>
-                                 <td className="px-4 py-3 text-sm text-gray-600">
-                                    {receita.categoria_nome || "-"}
-                                 </td>
-                                 <td className="px-4 py-3 text-sm text-gray-600">
-                                    {receita.tipo_pagamento_nome || "-"}
-                                 </td>
-                                 <td className="px-4 py-3 text-sm font-semibold text-green-600">
-                                    {formatarValor(receita.valor)}
-                                 </td>
-                                 <td className="px-4 py-3 text-sm text-gray-600">
-                                    {formatarData(receita.data_recebimento)}
-                                 </td>
-                                 <td className="px-4 py-3">
-                                    <span
-                                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                          receita.ativa
-                                             ? "bg-green-100 text-green-800"
-                                             : "bg-gray-100 text-gray-800"
-                                       }`}
-                                    >
-                                       {receita.ativa ? "Ativa" : "Inativa"}
-                                    </span>
-                                 </td>
-                                 <td className="px-4 py-3 text-right text-sm space-x-2">
-                                    <button
-                                       onClick={() => abrirModal(receita)}
-                                       className="text-blue-600 hover:text-blue-900 font-medium"
-                                    >
-                                       Editar
-                                    </button>
-                                    <button
-                                       onClick={() => toggleAtiva(receita)}
-                                       className={`font-medium ${
-                                          receita.ativa
-                                             ? "text-red-600 hover:text-red-900"
-                                             : "text-green-600 hover:text-green-900"
-                                       }`}
-                                    >
-                                       {receita.ativa ? "Inativar" : "Reativar"}
-                                    </button>
-                                 </td>
-                              </tr>
-                           ))}
+                        <tbody className="divide-y divide-gray-100">
+                           {receitasFiltradas.map((receita) => {
+                              const status = getStatusReceita(receita);
+                              return (
+                                 <tr
+                                    key={receita.id}
+                                    className="hover:bg-gray-50 transition-colors"
+                                 >
+                                    <td className="px-4 py-3">
+                                       <div className="text-sm font-medium text-gray-900">
+                                          {receita.descricao}
+                                       </div>
+                                       {receita.recorrente && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 mt-0.5">
+                                             🔄 Recorrente
+                                          </span>
+                                       )}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                       {receita.categoria_nome || "—"}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                       {receita.tipo_pagamento_nome || "—"}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm font-semibold text-green-600">
+                                       {formatarValor(receita.valor)}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                       {formatarData(receita.data_recebimento)}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                       {status === "recebida" ? (
+                                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                             <span>Recebida</span>
+                                          </span>
+                                       ) : (
+                                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                                             <span>A receber</span>
+                                          </span>
+                                       )}
+                                    </td>
+                                    <td className="px-4 py-3 text-right space-x-2">
+                                       <button
+                                          onClick={() => abrirModal(receita)}
+                                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                       >
+                                          Editar
+                                       </button>
+                                       <button
+                                          onClick={() =>
+                                             excluirReceita(receita)
+                                          }
+                                          className="text-red-500 hover:text-red-700 text-sm font-medium"
+                                       >
+                                          Excluir
+                                       </button>
+                                    </td>
+                                 </tr>
+                              );
+                           })}
                         </tbody>
                      </table>
                   </div>
@@ -397,11 +572,17 @@ export default function ReceitasPage() {
          {/* Modal Criar/Editar */}
          {modalAberto && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-               <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+               <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
                   <div className="p-6">
-                     <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-4">
+                     <h2 className="text-lg font-bold text-gray-800 mb-1">
                         {editando ? "Editar Receita" : "Nova Receita"}
                      </h2>
+                     <p className="text-xs text-gray-500 mb-4">
+                        Mesa:{" "}
+                        <span className="font-semibold text-green-600">
+                           {mesaSelecionada?.nome}
+                        </span>
+                     </p>
 
                      {erro && (
                         <div className="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
@@ -410,28 +591,6 @@ export default function ReceitasPage() {
                      )}
 
                      <form onSubmit={salvarReceita} className="space-y-4">
-                        {/* Mesa */}
-                        <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Mesa *
-                           </label>
-                           <select
-                              value={mesaId}
-                              onChange={(e) =>
-                                 setMesaId(Number(e.target.value))
-                              }
-                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                              disabled={!!editando}
-                           >
-                              <option value="">Selecione...</option>
-                              {mesas.map((mesa) => (
-                                 <option key={mesa.id} value={mesa.id}>
-                                    {mesa.nome}
-                                 </option>
-                              ))}
-                           </select>
-                        </div>
-
                         {/* Descrição */}
                         <div>
                            <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -448,7 +607,7 @@ export default function ReceitasPage() {
                         </div>
 
                         {/* Valor e Data */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                  Valor *
@@ -459,10 +618,9 @@ export default function ReceitasPage() {
                                  value={valor}
                                  onChange={(e) => setValor(e.target.value)}
                                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                 placeholder="0.00"
+                                 placeholder="0,00"
                               />
                            </div>
-
                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                  Data de Recebimento *
@@ -479,7 +637,7 @@ export default function ReceitasPage() {
                         </div>
 
                         {/* Categoria e Tipo de Pagamento */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                  Categoria
@@ -499,7 +657,6 @@ export default function ReceitasPage() {
                                  ))}
                               </select>
                            </div>
-
                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                  Tipo de Pagamento
@@ -522,19 +679,26 @@ export default function ReceitasPage() {
                         </div>
 
                         {/* Recorrente */}
-                        <div className="flex items-center">
+                        <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
                            <input
                               type="checkbox"
+                              id="recorrente"
                               checked={recorrente}
                               onChange={(e) => setRecorrente(e.target.checked)}
                               className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                            />
-                           <label className="ml-2 text-sm text-gray-700">
-                              Receita recorrente (mensal)
+                           <label
+                              htmlFor="recorrente"
+                              className="text-sm text-gray-700 cursor-pointer"
+                           >
+                              Receita recorrente{" "}
+                              <span className="text-gray-400 text-xs">
+                                 (se repete todo mês)
+                              </span>
                            </label>
                         </div>
 
-                        <div className="flex space-x-3 pt-4">
+                        <div className="flex space-x-3 pt-2">
                            <button
                               type="button"
                               onClick={fecharModal}
