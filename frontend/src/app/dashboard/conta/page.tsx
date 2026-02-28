@@ -8,7 +8,20 @@ import {
    MouseEvent,
    WheelEvent,
    TouchEvent,
+   ChangeEvent,
 } from "react";
+
+// Máscara de telefone brasileiro: (XX) 9 XXXX-XXXX ou (XX) XXXX-XXXX
+function maskTelefone(value: string): string {
+   const nums = value.replace(/\D/g, "").slice(0, 11);
+   if (nums.length === 0) return "";
+   if (nums.length <= 2) return `(${nums}`;
+   if (nums.length <= 6) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`;
+   if (nums.length <= 10)
+      return `(${nums.slice(0, 2)}) ${nums.slice(2, 6)}-${nums.slice(6)}`;
+   // 11 dígitos — celular com 9
+   return `(${nums.slice(0, 2)}) ${nums.slice(2, 3)} ${nums.slice(3, 7)}-${nums.slice(7)}`;
+}
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import contaService, {
    PerfilUsuario,
@@ -461,6 +474,15 @@ export default function MinhaContaPage() {
    const fileRef = useRef<HTMLInputElement>(null);
    const [salvandoFoto, setSalvandoFoto] = useState(false);
    const [cropperSrc, setCropperSrc] = useState<string | null>(null);
+   const [confirmarRemoverFoto, setConfirmarRemoverFoto] = useState(false);
+
+   // Alteração de email
+   const [novoEmail, setNovoEmail] = useState("");
+   const [solicitandoEmail, setSolicitandoEmail] = useState(false);
+   const [feedbackEmail, setFeedbackEmail] = useState<{
+      type: "success" | "error";
+      msg: string;
+   } | null>(null);
    const [feedbackFoto, setFeedbackFoto] = useState<{
       type: "success" | "error";
       msg: string;
@@ -492,6 +514,21 @@ export default function MinhaContaPage() {
       type: "success" | "error";
       msg: string;
    } | null>(null);
+
+   // Detectar retorno de confirmação de email
+   useEffect(() => {
+      if (typeof window !== "undefined") {
+         const params = new URLSearchParams(window.location.search);
+         if (params.get("email_atualizado") === "1") {
+            setFeedbackEmail({
+               type: "success",
+               msg: "✅ Email atualizado com sucesso! Use o novo email para fazer login.",
+            });
+            // Limpar da URL sem reload
+            window.history.replaceState({}, "", window.location.pathname);
+         }
+      }
+   }, []);
 
    // Carregar perfil
    useEffect(() => {
@@ -579,6 +616,34 @@ export default function MinhaContaPage() {
    };
 
    // ── Solicitar troca de senha ──────────────────────────────
+   const solicitarEmail = async () => {
+      if (!novoEmail.trim() || !novoEmail.includes("@")) {
+         setFeedbackEmail({ type: "error", msg: "Informe um email válido." });
+         return;
+      }
+      if (novoEmail.trim() === perfil?.email) {
+         setFeedbackEmail({
+            type: "error",
+            msg: "O novo email é igual ao atual.",
+         });
+         return;
+      }
+      setSolicitandoEmail(true);
+      setFeedbackEmail(null);
+      try {
+         const res = await contaService.solicitarTrocaEmail(novoEmail.trim());
+         setFeedbackEmail({ type: "success", msg: res.message });
+         setNovoEmail("");
+      } catch (err: any) {
+         setFeedbackEmail({
+            type: "error",
+            msg: err?.response?.data?.error || "Erro ao solicitar alteração.",
+         });
+      } finally {
+         setSolicitandoEmail(false);
+      }
+   };
+
    const solicitarSenha = async () => {
       setSolicitandoSenha(true);
       setFeedbackSenha(null);
@@ -712,7 +777,7 @@ export default function MinhaContaPage() {
                         </button>
                         {perfil?.foto_url && (
                            <button
-                              onClick={removerFoto}
+                              onClick={() => setConfirmarRemoverFoto(true)}
                               disabled={salvandoFoto}
                               className="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
                            >
@@ -766,13 +831,21 @@ export default function MinhaContaPage() {
                         </span>
                      </div>
                   </div>
-                  <InputField
-                     label="Telefone"
-                     value={telefone}
-                     onChange={setTelefone}
-                     placeholder="(11) 99999-9999"
-                     maxLength={20}
-                  />
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Telefone
+                     </label>
+                     <input
+                        type="tel"
+                        value={telefone}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                           setTelefone(maskTelefone(e.target.value))
+                        }
+                        placeholder="(63) 9 9999-9999"
+                        maxLength={16}
+                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                     />
+                  </div>
 
                   {feedbackPerfil && (
                      <FeedbackBox
@@ -893,6 +966,99 @@ export default function MinhaContaPage() {
                         </>
                      )}
                   </button>
+               </div>
+
+               {/* Divisor */}
+               <hr className="border-gray-100 my-5" />
+
+               {/* Alterar email */}
+               <div className="flex items-start gap-4 p-4 bg-blue-50 border border-blue-100 rounded-xl mb-5">
+                  <svg
+                     className="w-5 h-5 text-blue-500 mt-0.5 shrink-0"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                  >
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                     />
+                  </svg>
+                  <div>
+                     <p className="text-sm font-semibold text-blue-800">
+                        Alteração de email via confirmação
+                     </p>
+                     <p className="text-xs text-blue-700 mt-1">
+                        Enviaremos um link de confirmação para o{" "}
+                        <strong>novo email</strong> informado. Após clicar no
+                        link, o email da conta será atualizado. O link expira em
+                        1 hora.
+                     </p>
+                  </div>
+               </div>
+
+               <div className="space-y-3">
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Novo email
+                     </label>
+                     <input
+                        type="email"
+                        value={novoEmail}
+                        onChange={(e) => setNovoEmail(e.target.value)}
+                        placeholder="novo@email.com"
+                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                     />
+                  </div>
+
+                  {feedbackEmail && (
+                     <FeedbackBox
+                        type={feedbackEmail.type}
+                        message={feedbackEmail.msg}
+                     />
+                  )}
+
+                  <div className="flex justify-between items-center">
+                     <div>
+                        <p className="text-sm font-semibold text-gray-700">
+                           Alterar email
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                           Um link de confirmação será enviado para o novo email
+                        </p>
+                     </div>
+                     <button
+                        onClick={solicitarEmail}
+                        disabled={solicitandoEmail || !novoEmail.trim()}
+                        className="px-4 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 disabled:opacity-50 transition-colors flex items-center gap-2 shrink-0"
+                     >
+                        {solicitandoEmail ? (
+                           <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Enviando...
+                           </>
+                        ) : (
+                           <>
+                              <svg
+                                 className="w-4 h-4"
+                                 fill="none"
+                                 stroke="currentColor"
+                                 viewBox="0 0 24 24"
+                              >
+                                 <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                 />
+                              </svg>
+                              Enviar link
+                           </>
+                        )}
+                     </button>
+                  </div>
                </div>
             </SectionCard>
 
@@ -1194,6 +1360,61 @@ export default function MinhaContaPage() {
                </div>
             </SectionCard>
          </div>
+         {/* ── Modal Confirmar Remoção de Foto ── */}
+         {confirmarRemoverFoto && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+               <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                     <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                        <svg
+                           className="w-5 h-5 text-red-600"
+                           fill="none"
+                           stroke="currentColor"
+                           viewBox="0 0 24 24"
+                        >
+                           <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                           />
+                        </svg>
+                     </div>
+                     <div>
+                        <h3 className="text-base font-bold text-gray-800">
+                           Remover foto
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                           Esta ação não pode ser desfeita
+                        </p>
+                     </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-5">
+                     Tem certeza que deseja remover sua foto de perfil? Você
+                     voltará a usar a inicial do seu nome como avatar.
+                  </p>
+                  <div className="flex gap-3">
+                     <button
+                        onClick={() => setConfirmarRemoverFoto(false)}
+                        className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-200 transition-colors"
+                     >
+                        Cancelar
+                     </button>
+                     <button
+                        onClick={async () => {
+                           setConfirmarRemoverFoto(false);
+                           await removerFoto();
+                        }}
+                        disabled={salvandoFoto}
+                        className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 disabled:opacity-60 transition-colors"
+                     >
+                        Sim, remover
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
          {/* ── Modal Cropper de Foto ── */}
          {cropperSrc && (
             <AvatarCropper

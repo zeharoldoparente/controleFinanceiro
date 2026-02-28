@@ -74,47 +74,70 @@ class Receita {
    static async findByMesaIdFiltrado(mesaId, mes) {
       const primeiroDia = `${mes}-01`;
 
-      const [rows] = await db.query(
-         `SELECT
-             r.*,
-             c.nome  AS categoria_nome,
-             tp.nome AS tipo_pagamento_nome
-          FROM receitas r
-          LEFT JOIN categorias      c  ON r.categoria_id      = c.id
-          LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
-          WHERE r.mesa_id = ?
-            AND r.ativa   = TRUE
-            AND (
-               -- 1. Normal do mês
-               (
-                  r.recorrente               = FALSE
-                  AND r.origem_recorrente_id IS NULL
-                  AND DATE_FORMAT(r.data_recebimento, '%Y-%m') = ?
-               )
-               OR
-               -- 2. Recorrente sem confirmação neste mês
-               (
-                  r.recorrente           = TRUE
-                  AND r.data_recebimento <= LAST_DAY(?)
-                  AND NOT EXISTS (
-                     SELECT 1 FROM receitas cf
-                     WHERE cf.origem_recorrente_id = r.id
-                       AND cf.mes_referencia       = ?
-                       AND cf.ativa                = TRUE
-                  )
-               )
-               OR
-               -- 3. Confirmação de recorrente neste mês
-               (
-                  r.origem_recorrente_id IS NOT NULL
-                  AND r.mes_referencia   = ?
-               )
-            )
-          ORDER BY r.data_recebimento ASC, r.id ASC`,
-         [mesaId, mes, primeiroDia, mes, mes],
-      );
+      // Verifica se as colunas novas existem (compatibilidade com BDs sem migration)
+      let hasNewColumns = false;
+      try {
+         const [cols] = await db.query(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'receitas'
+               AND COLUMN_NAME = 'origem_recorrente_id'`,
+         );
+         hasNewColumns = cols.length > 0;
+      } catch (_) {}
 
-      return rows;
+      if (hasNewColumns) {
+         // Query completa com suporte a confirmações de recorrentes
+         const [rows] = await db.query(
+            `SELECT
+                r.*,
+                c.nome  AS categoria_nome,
+                tp.nome AS tipo_pagamento_nome
+             FROM receitas r
+             LEFT JOIN categorias      c  ON r.categoria_id      = c.id
+             LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
+             WHERE r.mesa_id = ?
+               AND r.ativa   = TRUE
+               AND (
+                  (r.recorrente = FALSE AND r.origem_recorrente_id IS NULL
+                   AND DATE_FORMAT(r.data_recebimento, '%Y-%m') = ?)
+                  OR
+                  (r.recorrente = TRUE AND r.data_recebimento <= LAST_DAY(?)
+                   AND NOT EXISTS (
+                      SELECT 1 FROM receitas cf
+                      WHERE cf.origem_recorrente_id = r.id
+                        AND cf.mes_referencia       = ?
+                        AND cf.ativa                = TRUE
+                   ))
+                  OR
+                  (r.origem_recorrente_id IS NOT NULL AND r.mes_referencia = ?)
+               )
+             ORDER BY r.data_recebimento ASC, r.id ASC`,
+            [mesaId, mes, primeiroDia, mes, mes],
+         );
+         return rows;
+      } else {
+         // Query compatível com schema original (sem colunas de confirmação)
+         const [rows] = await db.query(
+            `SELECT
+                r.*,
+                c.nome  AS categoria_nome,
+                tp.nome AS tipo_pagamento_nome
+             FROM receitas r
+             LEFT JOIN categorias      c  ON r.categoria_id      = c.id
+             LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
+             WHERE r.mesa_id = ?
+               AND r.ativa   = TRUE
+               AND (
+                  (r.recorrente = FALSE AND DATE_FORMAT(r.data_recebimento, '%Y-%m') = ?)
+                  OR
+                  (r.recorrente = TRUE AND r.data_recebimento <= LAST_DAY(?))
+               )
+             ORDER BY r.data_recebimento ASC, r.id ASC`,
+            [mesaId, mes, primeiroDia],
+         );
+         return rows;
+      }
    }
 
    // ─── CONFIRMAR ────────────────────────────────────────────────────────────

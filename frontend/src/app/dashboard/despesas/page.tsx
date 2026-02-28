@@ -169,6 +169,26 @@ export default function DespesasPage() {
       }
    }, [router, mesaSelecionada, mesaCarregando, mesSelecionado]);
 
+   // Carrega selects independentemente para garantir disponibilidade no modal
+   useEffect(() => {
+      if (mesaCarregando || !mesaSelecionada) return;
+      const carregarSelects = async () => {
+         try {
+            const [cats, tipos, carts] = await Promise.all([
+               categoriaService.listar("despesa", false),
+               tipoPagamentoService.listar(false),
+               cartaoService.listar(false),
+            ]);
+            setCategorias(cats);
+            setTiposPagamento(tipos);
+            setCartoes(carts);
+         } catch (err) {
+            console.error("Erro ao carregar selects:", err);
+         }
+      };
+      carregarSelects();
+   }, [mesaSelecionada, mesaCarregando]);
+
    const carregarDados = async () => {
       if (!mesaSelecionada) {
          setLoading(false);
@@ -177,20 +197,7 @@ export default function DespesasPage() {
       setLoading(true);
 
       // Dados base (selects do modal) — independentes, não bloqueiam entre si
-      try {
-         const [categoriasData, tiposData, cartoesData] = await Promise.all([
-            categoriaService.listar("despesa", false),
-            tipoPagamentoService.listar(false),
-            cartaoService.listar(false),
-         ]);
-         setCategorias(categoriasData);
-         setTiposPagamento(tiposData);
-         setCartoes(cartoesData);
-      } catch (err) {
-         console.error("Erro ao carregar dados base:", err);
-      }
-
-      // Despesas do mês — separado para não bloquear os selects acima
+      // Despesas do mês
       try {
          const despesasData = await despesaService.listar(
             mesaSelecionada.id,

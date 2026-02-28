@@ -505,6 +505,49 @@ class EmailService {
          html,
       });
    }
+
+   // ── Email: Confirmação de troca de email (enviado para o NOVO email) ──
+   async enviarEmailConfirmacaoTrocaEmail(novoEmail, nome, token, emailAtual) {
+      const link = `${process.env.FRONTEND_URL || "http://localhost:3000"}/api/conta/confirmar-troca-email?token=${token}`;
+      // Usar a URL da API do backend, não do frontend
+      const linkBackend = `${process.env.BACKEND_URL || "http://localhost:3001"}/api/conta/confirmar-troca-email?token=${token}`;
+      const primeiroNome = nome.split(" ")[0];
+
+      const html = baseTemplate({
+         headerTitle: "Confirme seu novo email",
+         headerSubtitle: "Um clique para finalizar a alteração",
+         body: `
+           <p class="greeting">Olá, ${primeiroNome}!</p>
+           <p class="text">
+             Recebemos uma solicitação para alterar o email da sua conta no ControlFin.
+             Clique no botão abaixo para <strong>confirmar seu novo endereço de email</strong>.
+           </p>
+           <div class="highlight-box" style="margin-bottom:16px;">
+             <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Email atual</div>
+             <div style="font-size:14px;color:#374151;">${emailAtual}</div>
+             <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-top:10px;margin-bottom:4px;">Novo email</div>
+             <div style="font-size:14px;font-weight:700;color:#059669;">${novoEmail}</div>
+           </div>
+           <div class="btn-wrapper">
+             <a href="${linkBackend}" class="btn btn-orange">Confirmar novo email</a>
+           </div>
+           <p class="fallback-link">Ou copie o link: <a href="${linkBackend}">${linkBackend}</a></p>
+           <div class="warning-box">
+             ⚠️ <strong>Este link expira em 1 hora.</strong> Se você não fez esta solicitação, ignore este email — seu email permanece inalterado.
+           </div>
+           <hr class="divider" />
+           <div class="info-row"><span class="info-icon">🔒</span><span>Após confirmar, você deverá usar o novo email para fazer login</span></div>
+           <div class="info-row"><span class="info-icon">⚠️</span><span>Nunca compartilhe este link com ninguém</span></div>
+         `,
+      });
+
+      await this.transporter.sendMail({
+         from: process.env.EMAIL_FROM,
+         to: novoEmail,
+         subject: "📧 Confirme seu novo email — ControlFin",
+         html,
+      });
+   }
 }
 
 module.exports = new EmailService();

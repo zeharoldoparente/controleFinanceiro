@@ -70,6 +70,14 @@ const contaService = {
       return data;
    },
 
+   // ── Troca de email ────────────────────────────────────────
+   async solicitarTrocaEmail(novo_email: string): Promise<{ message: string }> {
+      const { data } = await api.post("/conta/solicitar-troca-email", {
+         novo_email,
+      });
+      return data;
+   },
+
    // ── Suporte ───────────────────────────────────────────────
    async enviarSuporte(payload: {
       tipo: TipoSuporte;

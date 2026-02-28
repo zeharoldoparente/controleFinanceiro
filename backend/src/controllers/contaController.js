@@ -208,6 +208,95 @@ class ContaController {
          res.status(500).json({ error: "Erro ao enviar mensagem de suporte" });
       }
    }
+
+   // ── POST /api/conta/solicitar-troca-email ─────────────────
+   // Usuário logado informa o novo email — enviamos link de confirmação para o NOVO email
+   static async solicitarTrocaEmail(req, res) {
+      try {
+         const { novo_email } = req.body;
+         if (!novo_email || !novo_email.includes("@"))
+            return res.status(400).json({ error: "Informe um email válido" });
+
+         // Verifica se o email já está em uso
+         const [existente] = await db.query(
+            "SELECT id FROM users WHERE email = ? AND id != ?",
+            [novo_email.trim().toLowerCase(), req.userId],
+         );
+         if (existente.length > 0)
+            return res
+               .status(400)
+               .json({ error: "Este email já está cadastrado em outra conta" });
+
+         const [rows] = await db.query(
+            "SELECT nome, email FROM users WHERE id = ?",
+            [req.userId],
+         );
+         if (!rows[0])
+            return res.status(404).json({ error: "Usuário não encontrado" });
+
+         const { nome, email: emailAtual } = rows[0];
+         const token = crypto.randomBytes(32).toString("hex");
+         const expira = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+         // Salva token + novo email pendente
+         await db.query(
+            "UPDATE users SET email_novo_pendente = ?, email_token = ?, email_token_expira = ? WHERE id = ?",
+            [novo_email.trim().toLowerCase(), token, expira, req.userId],
+         );
+
+         await emailService.enviarEmailConfirmacaoTrocaEmail(
+            novo_email,
+            nome,
+            token,
+            emailAtual,
+         );
+         res.json({
+            message:
+               "Link de confirmação enviado para o novo email! Verifique sua caixa de entrada.",
+         });
+      } catch (error) {
+         console.error("[conta] solicitarTrocaEmail:", error);
+         res.status(500).json({ error: "Erro ao solicitar troca de email" });
+      }
+   }
+
+   // ── GET /api/conta/confirmar-troca-email?token=xxx ─────────
+   // Chamado quando o usuário clica no link recebido no novo email
+   static async confirmarTrocaEmail(req, res) {
+      try {
+         const { token } = req.query;
+         if (!token) return res.status(400).json({ error: "Token inválido" });
+
+         const [rows] = await db.query(
+            "SELECT id, email_novo_pendente, email_token_expira FROM users WHERE email_token = ?",
+            [token],
+         );
+         if (!rows[0])
+            return res
+               .status(400)
+               .json({ error: "Token inválido ou já utilizado" });
+         if (new Date(rows[0].email_token_expira) < new Date())
+            return res
+               .status(400)
+               .json({ error: "Token expirado. Solicite uma nova troca." });
+
+         const novoEmail = rows[0].email_novo_pendente;
+
+         // Aplica a troca
+         await db.query(
+            "UPDATE users SET email = ?, email_novo_pendente = NULL, email_token = NULL, email_token_expira = NULL WHERE id = ?",
+            [novoEmail, rows[0].id],
+         );
+
+         // Redireciona para a página de sucesso no frontend
+         const FRONTEND_URL =
+            process.env.FRONTEND_URL || "http://localhost:3000";
+         res.redirect(`${FRONTEND_URL}/dashboard/conta?email_atualizado=1`);
+      } catch (error) {
+         console.error("[conta] confirmarTrocaEmail:", error);
+         res.status(500).json({ error: "Erro ao confirmar troca de email" });
+      }
+   }
 }
 
 module.exports = ContaController;

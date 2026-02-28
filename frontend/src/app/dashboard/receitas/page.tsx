@@ -141,10 +141,34 @@ export default function ReceitasPage() {
          router.push("/login");
          return;
       }
+      // Aguarda contexto de mesa completar (evita race condition com MesaProvider)
       if (mesaCarregando) return;
-      if (mesaSelecionada) carregarDados();
-      else setLoading(false);
+      if (mesaSelecionada) {
+         carregarDados();
+      } else {
+         // Só mostra "sem mesa" se o carregamento REALMENTE terminou sem mesas
+         setLoading(false);
+      }
    }, [router, mesaSelecionada, mesaCarregando, mesSelecionado]);
+
+   // Carrega categorias e tipos de pagamento de forma independente
+   // assim ficam prontos mesmo se carregarDados ainda não rodou
+   useEffect(() => {
+      if (mesaCarregando || !mesaSelecionada) return;
+      const carregarSelects = async () => {
+         try {
+            const [cats, tipos] = await Promise.all([
+               categoriaService.listar("receita", false),
+               tipoPagamentoService.listar(false),
+            ]);
+            setCategorias(cats);
+            setTiposPagamento(tipos);
+         } catch (err) {
+            console.error("Erro ao carregar selects:", err);
+         }
+      };
+      carregarSelects();
+   }, [mesaSelecionada, mesaCarregando]);
 
    // ─── Carregamento ─────────────────────────────────────────────────────────
 
@@ -154,17 +178,6 @@ export default function ReceitasPage() {
          return;
       }
       setLoading(true);
-
-      try {
-         const [categoriasData, tiposData] = await Promise.all([
-            categoriaService.listar("receita", false),
-            tipoPagamentoService.listar(false),
-         ]);
-         setCategorias(categoriasData);
-         setTiposPagamento(tiposData);
-      } catch (err) {
-         console.error("Erro ao carregar dados base:", err);
-      }
 
       try {
          const receitasData = await receitaService.listar(
