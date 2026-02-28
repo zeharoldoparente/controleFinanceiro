@@ -138,9 +138,36 @@ body {
 .footer-brand { font-size: 13px; font-weight: 700; color: #035E3D; margin-bottom: 6px; }
 .footer-text { font-size: 12px; color: #9ca3af; line-height: 1.6; }
 .footer-text a { color: #1E8449; text-decoration: none; }
+.logo-img {
+  height: 48px;
+  width: auto;
+  display: block;
+  margin: 0 auto 20px;
+}
+.footer-nasam {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+.footer-nasam-label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+.footer-nasam img {
+  height: 20px;
+  width: auto;
+}
 `;
 
-function baseTemplate({ headerTitle, headerSubtitle, headerEmoji, body }) {
+function baseTemplate({ headerTitle, headerSubtitle, body }) {
+   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+   const logoUrl = `${frontendUrl}/logo_nome_branco2.PNG`;
+   const nasamUrl = `${frontendUrl}/NASAMDev.svg`;
+
    return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -153,10 +180,7 @@ function baseTemplate({ headerTitle, headerSubtitle, headerEmoji, body }) {
   <div class="wrapper">
 
     <div class="header">
-      <div class="header-logo">
-        <div class="header-icon">${headerEmoji}</div>
-        <div class="header-brand">Control<span>Fin</span></div>
-      </div>
+      <img src="${logoUrl}" alt="ControlFin" class="logo-img" />
       <div class="header-title">${headerTitle}</div>
       ${headerSubtitle ? `<div class="header-subtitle">${headerSubtitle}</div>` : ""}
     </div>
@@ -170,6 +194,10 @@ function baseTemplate({ headerTitle, headerSubtitle, headerEmoji, body }) {
       <div class="footer-text">
         Este é um email automático, por favor não responda.<br />
         Em caso de dúvidas, acesse o sistema e utilize o suporte.
+      </div>
+      <div class="footer-nasam">
+        <span class="footer-nasam-label">Desenvolvido e mantido por</span>
+        <img src="${nasamUrl}" alt="NASAM Dev" />
       </div>
     </div>
 
@@ -201,7 +229,6 @@ class EmailService {
       const html = baseTemplate({
          headerTitle: "Confirme seu email",
          headerSubtitle: "Só mais um passo para começar",
-         headerEmoji: "✉️",
          body: `
            <p class="greeting">Olá, ${primeiroNome}! 👋</p>
            <p class="text">
@@ -236,7 +263,6 @@ class EmailService {
       const html = baseTemplate({
          headerTitle: "Você foi convidado!",
          headerSubtitle: `Para participar da mesa "${nomeMesa}"`,
-         headerEmoji: "🤝",
          body: `
            <p class="greeting">Olá! 👋</p>
            <p class="text">
@@ -282,7 +308,6 @@ class EmailService {
       const html = baseTemplate({
          headerTitle: "Novo convite de mesa",
          headerSubtitle: `${nomeQuemConvidou} quer compartilhar finanças com você`,
-         headerEmoji: "📊",
          body: `
            <p class="greeting">Olá, ${primeiroNome}! 👋</p>
            <p class="text">
@@ -324,7 +349,6 @@ class EmailService {
       const html = baseTemplate({
          headerTitle: "Redefinir senha",
          headerSubtitle: "Recebemos sua solicitação de redefinição",
-         headerEmoji: "🔐",
          body: `
            <p class="greeting">Olá, ${primeiroNome}!</p>
            <p class="text">
@@ -348,6 +372,136 @@ class EmailService {
          from: process.env.EMAIL_FROM,
          to: para,
          subject: "🔐 Redefinição de senha — ControlFin",
+         html,
+      });
+   }
+
+   // ── Email: Solicitação de troca de senha (feita pelo próprio usuário logado) ──
+   async enviarEmailAlteracaoSenha(para, nome, token) {
+      const link = `${process.env.FRONTEND_URL}/resetar-senha/${token}`;
+      const primeiroNome = nome.split(" ")[0];
+
+      const html = baseTemplate({
+         headerTitle: "Alteração de senha",
+         headerSubtitle: "Confirme para continuar",
+         body: `
+           <p class="greeting">Olá, ${primeiroNome}!</p>
+           <p class="text">
+             Você solicitou a <strong>alteração da sua senha</strong> no ControlFin.
+             Clique no botão abaixo para criar uma nova senha segura.
+           </p>
+           <div class="btn-wrapper">
+             <a href="${link}" class="btn btn-orange">Criar nova senha</a>
+           </div>
+           <p class="fallback-link">Ou copie o link: <a href="${link}">${link}</a></p>
+           <div class="warning-box">
+             ⚠️ <strong>Este link expira em 1 hora.</strong> Se você não realizou essa solicitação, ignore este email — sua senha permanece inalterada.
+           </div>
+           <hr class="divider" />
+           <div class="info-row"><span class="info-icon">🔒</span><span>Nunca compartilhe este link com ninguém, nem com o suporte</span></div>
+           <div class="info-row"><span class="info-icon">🛡️</span><span>O ControlFin nunca solicita sua senha por email ou telefone</span></div>
+         `,
+      });
+
+      await this.transporter.sendMail({
+         from: process.env.EMAIL_FROM,
+         to: para,
+         subject: "🔐 Confirmação de alteração de senha — ControlFin",
+         html,
+      });
+   }
+
+   // ── Email: Mensagem de suporte recebida (vai para o SAC) ──
+   async enviarEmailSuporte({
+      nomeUsuario,
+      emailUsuario,
+      tipo,
+      assunto,
+      mensagem,
+   }) {
+      const tipoLabel =
+         {
+            sugestao: "💡 Sugestão",
+            problema: "🐛 Problema/Bug",
+            solicitacao: "📋 Solicitação",
+            reclamacao: "😠 Reclamação",
+            duvida: "❓ Dúvida",
+         }[tipo] || tipo;
+
+      const html = baseTemplate({
+         headerTitle: "Nova mensagem de suporte",
+         headerSubtitle: `${tipoLabel} — ${assunto}`,
+         body: `
+           <p class="greeting">Nova mensagem recebida via ControlFin</p>
+           <div class="highlight-box">
+             <div style="display:flex;gap:8px;margin-bottom:6px;">
+               <span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Remetente</span>
+             </div>
+             <div style="font-size:15px;font-weight:700;color:#111827;">${nomeUsuario}</div>
+             <div style="font-size:13px;color:#6b7280;margin-top:2px;">${emailUsuario}</div>
+           </div>
+           <div class="highlight-box" style="margin-top:12px;">
+             <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Tipo</div>
+             <div style="font-size:14px;font-weight:600;color:#111827;">${tipoLabel}</div>
+           </div>
+           <div class="highlight-box" style="margin-top:12px;">
+             <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Assunto</div>
+             <div style="font-size:14px;font-weight:600;color:#111827;">${assunto}</div>
+           </div>
+           <div class="highlight-box" style="margin-top:12px;">
+             <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Mensagem</div>
+             <div style="font-size:14px;color:#374151;line-height:1.7;white-space:pre-wrap;">${mensagem}</div>
+           </div>
+           <hr class="divider" />
+           <div class="info-row"><span class="info-icon">📧</span><span>Para responder, envie um email diretamente para <strong>${emailUsuario}</strong></span></div>
+         `,
+      });
+
+      await this.transporter.sendMail({
+         from: process.env.EMAIL_FROM,
+         to: "sac.controlfin@gmail.com",
+         replyTo: emailUsuario,
+         subject: `[SAC ControlFin] ${tipoLabel}: ${assunto}`,
+         html,
+      });
+   }
+
+   // ── Email: Confirmação de suporte para o usuário ──
+   async enviarEmailConfirmacaoSuporte(para, nome, tipo, assunto) {
+      const primeiroNome = nome.split(" ")[0];
+      const tipoLabel =
+         {
+            sugestao: "sugestão",
+            problema: "relato de problema",
+            solicitacao: "solicitação",
+            reclamacao: "reclamação",
+            duvida: "dúvida",
+         }[tipo] || "mensagem";
+
+      const html = baseTemplate({
+         headerTitle: "Mensagem recebida!",
+         headerSubtitle: "Entraremos em contato em breve",
+         body: `
+           <p class="greeting">Olá, ${primeiroNome}! 👋</p>
+           <p class="text">
+             Recebemos sua <strong>${tipoLabel}</strong> e nossa equipe irá analisá-la em breve.
+             Agradecemos o contato — seu feedback é fundamental para melhorarmos o ControlFin.
+           </p>
+           <div class="highlight-box">
+             <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Assunto registrado</div>
+             <div style="font-size:15px;font-weight:700;color:#111827;">${assunto}</div>
+           </div>
+           <hr class="divider" />
+           <div class="info-row"><span class="info-icon">⏱️</span><span>Prazo de resposta: <strong>até 3 dias úteis</strong></span></div>
+           <div class="info-row"><span class="info-icon">📧</span><span>Respondemos pelo email cadastrado na sua conta</span></div>
+           <div class="info-row"><span class="info-icon">💚</span><span>Obrigado por usar o ControlFin!</span></div>
+         `,
+      });
+
+      await this.transporter.sendMail({
+         from: process.env.EMAIL_FROM,
+         to: para,
+         subject: "✅ Sua mensagem foi recebida — ControlFin",
          html,
       });
    }

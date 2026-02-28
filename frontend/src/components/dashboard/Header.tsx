@@ -6,6 +6,7 @@ import notificacaoService, { Notificacao } from "@/services/notificacaoService";
 import conviteService from "@/services/conviteService";
 import { useMesa } from "@/contexts/MesaContext";
 import type { User } from "@/types";
+import contaService from "@/services/contaService";
 
 interface HeaderProps {
    onMenuToggle: () => void;
@@ -24,6 +25,7 @@ function fmtTempo(iso: string) {
 
 export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
    const [user, setUser] = useState<User | null>(null);
+   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
    const [isFirstVisit, setIsFirstVisit] = useState(true);
    const { mesaSelecionada, mesas, selecionarMesa, recarregarMesas } =
       useMesa();
@@ -52,6 +54,11 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
 
    useEffect(() => {
       const userData = authService.getUser();
+      // Carrega foto do perfil
+      contaService
+         .getPerfil()
+         .then((p) => setFotoUrl(p.foto_url))
+         .catch(() => {});
       setUser(userData);
 
       const hasVisited = localStorage.getItem("hasVisitedDashboard");
@@ -480,9 +487,17 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                </div>
 
                {/* Avatar */}
-               <div className="w-9 h-9 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                  {user.nome.charAt(0).toUpperCase()}
-               </div>
+               {fotoUrl ? (
+                  <img
+                     src={fotoUrl}
+                     alt={user.nome}
+                     className="w-9 h-9 rounded-full object-cover ring-2 ring-white/30 shadow-sm"
+                  />
+               ) : (
+                  <div className="w-9 h-9 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                     {user.nome.charAt(0).toUpperCase()}
+                  </div>
+               )}
 
                {/* Botão Sair - Desktop */}
                <button

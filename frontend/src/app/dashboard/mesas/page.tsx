@@ -45,6 +45,14 @@ export default function MesasPage() {
    const [enviandoConvite, setEnviandoConvite] = useState(false);
    const [erroConvite, setErroConvite] = useState("");
    const [sucessoConvite, setSucessoConvite] = useState("");
+   const [erroRemover, setErroRemover] = useState("");
+   const [erroCancelar, setErroCancelar] = useState<Record<number, string>>({});
+   const [cancelandoConvite, setCancelando] = useState<Set<number>>(new Set());
+   const [confirmarCancelamento, setConfirmarCancelamento] = useState<{
+      mesaId: number;
+      conviteId: number;
+      email: string;
+   } | null>(null);
 
    // Confirmar remoção de membro
    const [removendoMembro, setRemovendoMembro] = useState<{
@@ -134,13 +142,17 @@ export default function MesasPage() {
       setErroConvite("");
       setSucessoConvite("");
       try {
-         const resp = await conviteService.enviar(
-            convidandoMesa.id,
-            emailConvite.trim(),
-         );
-         setSucessoConvite(resp.message);
+         const mesaId = convidandoMesa.id;
+         await conviteService.enviar(mesaId, emailConvite.trim());
+         await recarregarMembros(mesaId);
+         // Fecha o modal imediatamente e exibe sucesso na página
+         setConvidandoMesa(null);
          setEmailConvite("");
-         await recarregarMembros(convidandoMesa.id);
+         setSucessoConvite("");
+         setSucesso(
+            "✅ Convite enviado! O convidado receberá um email em breve.",
+         );
+         setTimeout(() => setSucesso(""), 4000);
       } catch (error) {
          if (isApiError(error)) {
             setErroConvite(
@@ -156,6 +168,7 @@ export default function MesasPage() {
 
    const removerMembro = async () => {
       if (!removendoMembro) return;
+      setErroRemover("");
       try {
          await conviteService.removerMembro(
             removendoMembro.mesaId,
@@ -163,21 +176,45 @@ export default function MesasPage() {
          );
          await recarregarMembros(removendoMembro.mesaId);
          setRemovendoMembro(null);
+         setErroRemover("");
       } catch {
-         alert("Erro ao remover membro");
-         setRemovendoMembro(null);
+         setErroRemover("Não foi possível remover o membro. Tente novamente.");
       }
    };
 
-   const cancelarConvitePendente = async (
+   const abrirConfirmarCancelamento = (
       mesaId: number,
       conviteId: number,
+      email: string,
    ) => {
+      setErroCancelar((prev) => {
+         const n = { ...prev };
+         delete n[conviteId];
+         return n;
+      });
+      setConfirmarCancelamento({ mesaId, conviteId, email });
+   };
+
+   const executarCancelamento = async () => {
+      if (!confirmarCancelamento) return;
+      const { mesaId, conviteId } = confirmarCancelamento;
+      setCancelando((prev) => new Set(prev).add(conviteId));
       try {
          await conviteService.cancelarConvite(mesaId, conviteId);
+         setConfirmarCancelamento(null);
          await recarregarMembros(mesaId);
       } catch {
-         alert("Erro ao cancelar convite");
+         setErroCancelar((prev) => ({
+            ...prev,
+            [conviteId]: "Não foi possível cancelar. Tente novamente.",
+         }));
+         setConfirmarCancelamento(null);
+      } finally {
+         setCancelando((prev) => {
+            const n = new Set(prev);
+            n.delete(conviteId);
+            return n;
+         });
       }
    };
 
@@ -587,39 +624,41 @@ export default function MesasPage() {
                                                          <span className="bg-blue-100 text-blue-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
                                                             Convidado
                                                          </span>
-                                                         {ehDono && (
-                                                            <button
-                                                               onClick={() =>
-                                                                  setRemovendoMembro(
-                                                                     {
-                                                                        mesaId:
-                                                                           mesa.id,
-                                                                        userId:
-                                                                           membro.id,
-                                                                        nome: membro.nome,
-                                                                     },
-                                                                  )
-                                                               }
-                                                               className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                               title="Remover membro"
-                                                            >
-                                                               <svg
-                                                                  className="w-3.5 h-3.5"
-                                                                  fill="none"
-                                                                  stroke="currentColor"
-                                                                  viewBox="0 0 24 24"
+                                                         {ehDono &&
+                                                            membro.id !==
+                                                               currentUserId && (
+                                                               <button
+                                                                  onClick={() =>
+                                                                     setRemovendoMembro(
+                                                                        {
+                                                                           mesaId:
+                                                                              mesa.id,
+                                                                           userId:
+                                                                              membro.id,
+                                                                           nome: membro.nome,
+                                                                        },
+                                                                     )
+                                                                  }
+                                                                  className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                                  title="Remover membro"
                                                                >
-                                                                  <path
-                                                                     strokeLinecap="round"
-                                                                     strokeLinejoin="round"
-                                                                     strokeWidth={
-                                                                        2
-                                                                     }
-                                                                     d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6"
-                                                                  />
-                                                               </svg>
-                                                            </button>
-                                                         )}
+                                                                  <svg
+                                                                     className="w-3.5 h-3.5"
+                                                                     fill="none"
+                                                                     stroke="currentColor"
+                                                                     viewBox="0 0 24 24"
+                                                                  >
+                                                                     <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={
+                                                                           2
+                                                                        }
+                                                                        d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6"
+                                                                     />
+                                                                  </svg>
+                                                               </button>
+                                                            )}
                                                       </div>
                                                    </div>
                                                 ),
@@ -648,47 +687,74 @@ export default function MesasPage() {
                                                       (convite) => (
                                                          <div
                                                             key={convite.id}
-                                                            className="flex items-center justify-between py-2 px-3 bg-amber-50 rounded-lg border border-amber-100"
+                                                            className="flex flex-col gap-1"
                                                          >
-                                                            <div className="flex items-center gap-2">
-                                                               <svg
-                                                                  className="w-4 h-4 text-amber-500 shrink-0"
-                                                                  fill="none"
-                                                                  stroke="currentColor"
-                                                                  viewBox="0 0 24 24"
-                                                               >
-                                                                  <path
-                                                                     strokeLinecap="round"
-                                                                     strokeLinejoin="round"
-                                                                     strokeWidth={
-                                                                        2
-                                                                     }
-                                                                     d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                                                                  />
-                                                               </svg>
-                                                               <div>
-                                                                  <p className="text-xs text-gray-700">
-                                                                     {
-                                                                        convite.email_convidado
-                                                                     }
-                                                                  </p>
-                                                                  <p className="text-[10px] text-amber-600">
-                                                                     Aguardando
-                                                                     resposta
-                                                                  </p>
+                                                            <div className="flex items-center justify-between py-2 px-3 bg-amber-50 rounded-lg border border-amber-100">
+                                                               <div className="flex items-center gap-2">
+                                                                  <svg
+                                                                     className="w-4 h-4 text-amber-500 shrink-0"
+                                                                     fill="none"
+                                                                     stroke="currentColor"
+                                                                     viewBox="0 0 24 24"
+                                                                  >
+                                                                     <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={
+                                                                           2
+                                                                        }
+                                                                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                                                     />
+                                                                  </svg>
+                                                                  <div>
+                                                                     <p className="text-xs text-gray-700">
+                                                                        {
+                                                                           convite.email_convidado
+                                                                        }
+                                                                     </p>
+                                                                     <p className="text-[10px] text-amber-600">
+                                                                        Aguardando
+                                                                        resposta
+                                                                     </p>
+                                                                  </div>
                                                                </div>
-                                                            </div>
-                                                            <button
-                                                               onClick={() =>
-                                                                  cancelarConvitePendente(
-                                                                     mesa.id,
+                                                               <button
+                                                                  onClick={() =>
+                                                                     abrirConfirmarCancelamento(
+                                                                        mesa.id,
+                                                                        convite.id,
+                                                                        convite.email_convidado,
+                                                                     )
+                                                                  }
+                                                                  disabled={cancelandoConvite.has(
                                                                      convite.id,
-                                                                  )
-                                                               }
-                                                               className="text-[10px] text-red-500 hover:text-red-700 font-medium"
-                                                            >
-                                                               Cancelar
-                                                            </button>
+                                                                  )}
+                                                                  className="text-[10px] text-red-500 hover:text-red-700 font-medium disabled:opacity-40 flex items-center gap-1"
+                                                               >
+                                                                  {cancelandoConvite.has(
+                                                                     convite.id,
+                                                                  ) ? (
+                                                                     <>
+                                                                        <div className="w-2.5 h-2.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                                        Cancelando...
+                                                                     </>
+                                                                  ) : (
+                                                                     "Cancelar"
+                                                                  )}
+                                                               </button>
+                                                            </div>
+                                                            {erroCancelar[
+                                                               convite.id
+                                                            ] && (
+                                                               <p className="text-[10px] text-red-600 px-1">
+                                                                  {
+                                                                     erroCancelar[
+                                                                        convite
+                                                                           .id
+                                                                     ]
+                                                                  }
+                                                               </p>
+                                                            )}
                                                          </div>
                                                       ),
                                                    )}
@@ -961,6 +1027,76 @@ export default function MesasPage() {
             </div>
          )}
 
+         {/* ── Modal Confirmar Cancelamento de Convite ── */}
+         {confirmarCancelamento && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+               <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
+                  <div className="flex items-center space-x-3 mb-4">
+                     <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center shrink-0">
+                        <svg
+                           className="w-5 h-5 text-orange-600"
+                           fill="none"
+                           stroke="currentColor"
+                           viewBox="0 0 24 24"
+                        >
+                           <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                           />
+                        </svg>
+                     </div>
+                     <div>
+                        <h3 className="text-base font-bold text-gray-800">
+                           Cancelar convite
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                           Esta ação não pode ser desfeita
+                        </p>
+                     </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">
+                     Tem certeza que deseja cancelar o convite enviado para{" "}
+                     <span className="font-semibold">
+                        {confirmarCancelamento.email}
+                     </span>
+                     ?
+                  </p>
+                  <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-3 mb-5">
+                     ⚠️ O convite será removido permanentemente. A pessoa não
+                     conseguirá mais usar o link enviado por email.
+                  </p>
+                  <div className="flex space-x-3">
+                     <button
+                        onClick={() => setConfirmarCancelamento(null)}
+                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
+                     >
+                        Voltar
+                     </button>
+                     <button
+                        onClick={executarCancelamento}
+                        disabled={cancelandoConvite.has(
+                           confirmarCancelamento.conviteId,
+                        )}
+                        className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm disabled:opacity-60 flex items-center justify-center gap-2"
+                     >
+                        {cancelandoConvite.has(
+                           confirmarCancelamento.conviteId,
+                        ) ? (
+                           <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Cancelando...
+                           </>
+                        ) : (
+                           "Sim, cancelar convite"
+                        )}
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
          {/* ── Modal Confirmar Remoção de Membro ── */}
          {removendoMembro && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -975,9 +1111,30 @@ export default function MesasPage() {
                      </span>{" "}
                      desta mesa?
                   </p>
+                  {erroRemover && (
+                     <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+                        <svg
+                           className="w-4 h-4 shrink-0"
+                           fill="none"
+                           stroke="currentColor"
+                           viewBox="0 0 24 24"
+                        >
+                           <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                           />
+                        </svg>
+                        {erroRemover}
+                     </div>
+                  )}
                   <div className="flex space-x-3">
                      <button
-                        onClick={() => setRemovendoMembro(null)}
+                        onClick={() => {
+                           setRemovendoMembro(null);
+                           setErroRemover("");
+                        }}
                         className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
                      >
                         Cancelar

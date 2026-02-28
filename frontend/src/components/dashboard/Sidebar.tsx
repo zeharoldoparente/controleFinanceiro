@@ -157,8 +157,8 @@ export default function Sidebar({
                />
             </svg>
          ),
-         label: "Configurações",
-         href: "/dashboard/configuracoes",
+         label: "Minha Conta",
+         href: "/dashboard/conta",
       },
    ];
 

@@ -3,6 +3,7 @@ const Notificacao = require("../models/Notificacao");
 const User = require("../models/User");
 const Mesa = require("../models/Mesa");
 const db = require("../config/database");
+const emailService = require("../services/emailService"); // ← import no topo, uma vez só
 
 class ConviteController {
    static async create(req, res) {
@@ -27,7 +28,7 @@ class ConviteController {
             "SELECT criador_id, nome FROM mesas WHERE id = ?",
             [mesa_id],
          );
-         if (!mesa[0] || mesa[0].criador_id !== userId) {
+         if (!mesa[0] || parseInt(mesa[0].criador_id) !== parseInt(userId)) {
             return res.status(403).json({
                error: "Apenas o criador da mesa pode enviar convites",
             });
@@ -44,7 +45,9 @@ class ConviteController {
          }
 
          const [jaParticipa] = await db.query(
-            "SELECT mu.id FROM mesa_usuarios mu INNER JOIN users u ON mu.user_id = u.id WHERE mu.mesa_id = ? AND u.email = ?",
+            `SELECT mu.id FROM mesa_usuarios mu
+             INNER JOIN users u ON mu.user_id = u.id
+             WHERE mu.mesa_id = ? AND u.email = ?`,
             [mesa_id, email_convidado],
          );
          if (jaParticipa.length > 0) {
@@ -63,9 +66,8 @@ class ConviteController {
          const userInfo = await User.findById(userId);
          const nomeMesa = mesa[0].nome;
 
-         const EmailService = require("../services/emailService");
-
          if (usuarioConvidado) {
+            // ── Usuário já tem conta ────────────────────────────────────
             await Notificacao.create(
                usuarioConvidado.id,
                "convite_mesa",
@@ -77,10 +79,10 @@ class ConviteController {
 
             try {
                await emailService.enviarEmailConviteExistente(
-                  email,
-                  nomeQuemConvidou,
+                  email_convidado, // ← era "email" (undefined)
+                  userInfo.nome, // ← era "nomeQuemConvidou" (undefined)
                   nomeMesa,
-                  nomeConvidado,
+                  usuarioConvidado.nome, // ← era "nomeConvidado" (undefined)
                   token,
                );
             } catch (emailError) {
@@ -94,8 +96,10 @@ class ConviteController {
                usuarioCadastrado: true,
             });
          } else {
+            // ── Usuário ainda não tem conta ─────────────────────────────
             try {
-               await EmailService.enviarEmailConviteNovo(
+               await emailService.enviarEmailConviteNovo(
+                  // ← era "EmailService" (undefined)
                   email_convidado,
                   userInfo.nome,
                   nomeMesa,
@@ -123,7 +127,6 @@ class ConviteController {
       try {
          const userEmail = req.userEmail;
          const convites = await Convite.findPendentesByEmail(userEmail);
-
          res.json({ convites });
       } catch (error) {
          console.error(error);
@@ -135,7 +138,6 @@ class ConviteController {
       try {
          const userId = req.userId;
          const convites = await Convite.findEnviadosByUserId(userId);
-
          res.json({ convites });
       } catch (error) {
          console.error(error);
@@ -154,17 +156,14 @@ class ConviteController {
          if (!convite) {
             return res.status(404).json({ error: "Convite não encontrado" });
          }
-
          if (convite.status !== "pendente") {
             return res
                .status(400)
                .json({ error: "Este convite já foi processado" });
          }
-
          if (new Date(convite.expira_em) < new Date()) {
             return res.status(400).json({ error: "Este convite expirou" });
          }
-
          if (convite.email_convidado !== userEmail) {
             return res
                .status(403)
@@ -207,13 +206,11 @@ class ConviteController {
          if (!convite) {
             return res.status(404).json({ error: "Convite não encontrado" });
          }
-
          if (convite.status !== "pendente") {
             return res
                .status(400)
                .json({ error: "Este convite já foi processado" });
          }
-
          if (convite.email_convidado !== userEmail) {
             return res
                .status(403)

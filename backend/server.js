@@ -35,7 +35,8 @@ app.use(
    }),
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(
    "/api-docs",
@@ -68,6 +69,7 @@ const tipoPagamentoRoutes = require("./src/routes/tipoPagamentoRoutes");
 const mesaRoutes = require("./src/routes/mesaRoutes");
 const mesaMembroRoutes = require("./src/routes/mesaMembroRoutes");
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
+const contaRoutes = require("./src/routes/contaRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/categorias", categoriaRoutes);
@@ -79,9 +81,10 @@ app.use("/api/convites", conviteRoutes);
 app.use("/api/notificacoes", notificacaoRoutes);
 app.use("/api/bandeiras", bandeiraRoutes);
 app.use("/api/tipos-pagamento", tipoPagamentoRoutes);
-app.use("/api/mesa", mesaRoutes);
 app.use("/api/mesa/:mesa_id/membros", mesaMembroRoutes);
+app.use("/api/mesa", mesaRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/conta", contaRoutes);
 
 app.get("/", (req, res) => {
    res.json({ message: "API do Controle Financeiro funcionando!" });
