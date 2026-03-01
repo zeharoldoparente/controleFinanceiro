@@ -106,6 +106,69 @@ export interface DashboardData {
    vazio?: boolean;
 }
 
+const dashboardDataBase: DashboardData = {
+   mes: "",
+   mesas: [],
+   resumo: {
+      receitas: {
+         confirmado: 0,
+         provisionado: 0,
+         qtd_confirmadas: 0,
+      },
+      despesas: {
+         pago: 0,
+         provisionado: 0,
+         pendente: 0,
+         qtd_pagas: 0,
+         qtd_pendentes: 0,
+      },
+      saldo: {
+         real: 0,
+         previsto: 0,
+      },
+   },
+   alertas: {
+      despesas_vencidas: [],
+      despesas_hoje: [],
+      cartoes_criticos: [],
+   },
+   cartoes: [],
+   gastos_por_categoria: [],
+   evolucao_mensal: [],
+   fluxo_caixa: [],
+   ultimas_movimentacoes: [],
+   vazio: false,
+};
+
+function normalizarDashboardData(
+   data: Partial<DashboardData> | null | undefined,
+): DashboardData {
+   return {
+      ...dashboardDataBase,
+      ...data,
+      resumo: {
+         ...dashboardDataBase.resumo,
+         ...data?.resumo,
+         receitas: {
+            ...dashboardDataBase.resumo.receitas,
+            ...data?.resumo?.receitas,
+         },
+         despesas: {
+            ...dashboardDataBase.resumo.despesas,
+            ...data?.resumo?.despesas,
+         },
+         saldo: {
+            ...dashboardDataBase.resumo.saldo,
+            ...data?.resumo?.saldo,
+         },
+      },
+      alertas: {
+         ...dashboardDataBase.alertas,
+         ...data?.alertas,
+      },
+   };
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 const dashboardService = {
@@ -121,7 +184,7 @@ const dashboardService = {
 
       const query = params.toString();
       const response = await api.get(`/dashboard${query ? `?${query}` : ""}`);
-      return response.data as DashboardData;
+      return normalizarDashboardData(response.data);
    },
 };
 
