@@ -326,11 +326,19 @@ export default function DespesasPage() {
       }
 
       try {
+         const valorPorParcela =
+            parseFloat(valorProvisionado) /
+            (precisaCartao && isCartaoCredito && parcelas > 1
+               ? parcelas
+               : tipo === "variavel" && !precisaCartao && parcelas > 1
+                 ? parcelas
+                 : 1);
+
          const data: DespesaCreate = {
             mesa_id: mesaSelecionada.id,
             descricao,
             tipo,
-            valor_provisionado: parseFloat(valorProvisionado),
+            valor_provisionado: valorPorParcela,
             data_vencimento: dataVencimento,
             categoria_id: categoriaId ? Number(categoriaId) : undefined,
             tipo_pagamento_id: tipoPagamentoId
@@ -345,6 +353,11 @@ export default function DespesasPage() {
                   : tipo === "variavel" && parcelas > 1
                     ? parcelas
                     : undefined,
+            // Cartão débito: entra automaticamente como pago
+            ...(isCartaoDebito && {
+               paga: true,
+               valor_real: valorPorParcela,
+            }),
          };
 
          if (editando) {
@@ -352,10 +365,17 @@ export default function DespesasPage() {
             setSucesso("Despesa atualizada com sucesso!");
          } else {
             await despesaService.criar(data);
+            const qtdParcelas =
+               (precisaCartao && isCartaoCredito && parcelas > 1) ||
+               (tipo === "variavel" && parcelas > 1)
+                  ? parcelas
+                  : 1;
             setSucesso(
-               parcelas > 1
-                  ? `${parcelas} parcelas criadas!`
-                  : "Despesa criada com sucesso!",
+               qtdParcelas > 1
+                  ? `${qtdParcelas} parcelas criadas! (${formatarValor(valorPorParcela)} cada)`
+                  : isCartaoDebito
+                    ? "Despesa registrada como paga (débito automático)!"
+                    : "Despesa criada com sucesso!",
             );
          }
 
@@ -1462,11 +1482,45 @@ export default function DespesasPage() {
                                  </p>
                               </div>
 
+                              {/* Aviso cartão débito */}
+                              {isCartaoDebito && (
+                                 <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                                    <svg
+                                       className="w-4 h-4 text-blue-500 shrink-0 mt-0.5"
+                                       fill="none"
+                                       stroke="currentColor"
+                                       viewBox="0 0 24 24"
+                                    >
+                                       <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                       />
+                                    </svg>
+                                    <p className="text-xs text-blue-700">
+                                       <span className="font-semibold">
+                                          Compra no débito
+                                       </span>{" "}
+                                       — entrará automaticamente como{" "}
+                                       <span className="font-semibold">
+                                          paga
+                                       </span>
+                                       , pois o valor já foi debitado. Você
+                                       poderá anexar o comprovante depois.
+                                    </p>
+                                 </div>
+                              )}
+
                               {/* Valor + Data */}
                               <div className="grid grid-cols-2 gap-4">
                                  <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                       Valor provisionado *
+                                       {isCartaoCredito || isCartaoDebito
+                                          ? "Valor da compra *"
+                                          : parcelas > 1
+                                            ? "Valor total *"
+                                            : "Valor provisionado *"}
                                     </label>
                                     <input
                                        type="number"
@@ -1478,10 +1532,22 @@ export default function DespesasPage() {
                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                        placeholder="0,00"
                                     />
+                                    {parcelas > 1 &&
+                                       valorProvisionado &&
+                                       parseFloat(valorProvisionado) > 0 && (
+                                          <p className="text-xs text-red-500 mt-1">
+                                             ={" "}
+                                             {formatarValor(
+                                                parseFloat(valorProvisionado) /
+                                                   parcelas,
+                                             )}{" "}
+                                             por parcela
+                                          </p>
+                                       )}
                                  </div>
                                  <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                       {isCartaoCredito
+                                       {parcelas > 1 || isCartaoCredito
                                           ? "Data da 1ª parcela *"
                                           : "Data de vencimento *"}
                                     </label>
@@ -1527,18 +1593,6 @@ export default function DespesasPage() {
                                           const newId = Number(e.target.value);
                                           setTipoPagamentoId(newId);
                                           setCartaoId(""); // limpa cartão ao trocar tipo
-                                          // Se não for mais crédito, reseta parcelas
-                                          const tp = tiposPagamento.find(
-                                             (t) => t.id === newId,
-                                          );
-                                          const nome =
-                                             tp?.nome?.toLowerCase() ?? "";
-                                          if (
-                                             !nome.includes("crédito") &&
-                                             !nome.includes("credito")
-                                          ) {
-                                             setParcelas(1);
-                                          }
                                        }}
                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                     >
@@ -1644,15 +1698,16 @@ export default function DespesasPage() {
                                  </div>
                               )}
 
-                              {/* Parcelamento — só variável com cartão de crédito selecionado */}
+                              {/* Parcelamento — qualquer despesa variável (exceto débito e recorrente) */}
                               {tipo === "variavel" &&
-                                 isCartaoCredito &&
-                                 !editando && (
+                                 !isCartaoDebito &&
+                                 !editando &&
+                                 !recorrente && (
                                     <div
                                        className={`flex items-center gap-3 p-3 rounded-lg ${
                                           isCartaoCredito
                                              ? "bg-purple-50 border border-purple-200"
-                                             : "bg-gray-50"
+                                             : "bg-orange-50 border border-orange-200"
                                        }`}
                                     >
                                        <svg
@@ -1676,38 +1731,50 @@ export default function DespesasPage() {
                                           min={1}
                                           max={60}
                                           value={parcelas}
-                                          onChange={(e) =>
-                                             setParcelas(
-                                                Math.max(
-                                                   1,
-                                                   Number(e.target.value),
-                                                ),
-                                             )
-                                          }
+                                          onChange={(e) => {
+                                             const v = Math.max(
+                                                1,
+                                                Number(e.target.value),
+                                             );
+                                             setParcelas(v);
+                                             if (v > 1) setRecorrente(false);
+                                          }}
                                           className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-red-500"
                                        />
                                        <span className="text-sm text-gray-500">
                                           vez{parcelas > 1 ? "es" : ""}
                                        </span>
-                                       {parcelas > 1 && isCartaoCredito && (
-                                          <span className="text-xs text-purple-600 font-medium">
-                                             1 lançamento por mês no cartão
-                                          </span>
-                                       )}
+                                       {parcelas > 1 &&
+                                          valorProvisionado &&
+                                          parseFloat(valorProvisionado) > 0 && (
+                                             <span
+                                                className={`text-xs font-medium ${isCartaoCredito ? "text-purple-600" : "text-orange-600"}`}
+                                             >
+                                                {formatarValor(
+                                                   parseFloat(
+                                                      valorProvisionado,
+                                                   ) / parcelas,
+                                                )}
+                                                /mês
+                                             </span>
+                                          )}
                                     </div>
                                  )}
 
-                              {/* Recorrente — só variável E sem parcelamento no crédito */}
+                              {/* Recorrente — só variável E sem parcelamento ativo */}
                               {tipo === "variavel" &&
-                                 !(isCartaoCredito && parcelas > 1) && (
+                                 parcelas <= 1 &&
+                                 !isCartaoDebito && (
                                     <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
                                        <input
                                           type="checkbox"
                                           id="recorrente"
                                           checked={recorrente}
-                                          onChange={(e) =>
-                                             setRecorrente(e.target.checked)
-                                          }
+                                          onChange={(e) => {
+                                             setRecorrente(e.target.checked);
+                                             if (e.target.checked)
+                                                setParcelas(1);
+                                          }}
                                           className="w-4 h-4 text-red-600 rounded focus:ring-2 focus:ring-red-500"
                                        />
                                        <label

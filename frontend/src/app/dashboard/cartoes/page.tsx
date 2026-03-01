@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import authService from "@/services/authService";
 import cartaoService, { Cartao, CartaoCreate } from "@/services/cartaoService";
 import bandeiraService, { Bandeira } from "@/services/bandeiraService";
+import despesaService, { Despesa } from "@/services/despesaService";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { useMesa } from "@/contexts/MesaContext";
 import { isApiError } from "@/types";
 
 const CORES_PADRAO = [
@@ -21,29 +23,348 @@ const CORES_PADRAO = [
    "#6B7280",
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function gerarMeses() {
+   const meses = [];
+   const hoje = new Date();
+   const nomes = [
+      "Janeiro",
+      "Fevereiro",
+      "Março",
+      "Abril",
+      "Maio",
+      "Junho",
+      "Julho",
+      "Agosto",
+      "Setembro",
+      "Outubro",
+      "Novembro",
+      "Dezembro",
+   ];
+   for (let i = -12; i <= 3; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+      meses.push({
+         valor: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+         label: `${nomes[d.getMonth()]}/${d.getFullYear()}`,
+      });
+   }
+   return meses;
+}
+
+function mesAtual() {
+   const d = new Date();
+   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatarValor(v: number | string | null | undefined) {
+   return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+   }).format(parseFloat(String(v ?? 0)));
+}
+
+function formatarData(data: string) {
+   const [ano, mes, dia] = data.substring(0, 10).split("-");
+   return `${dia}/${mes}/${ano}`;
+}
+
+const MESES = gerarMeses();
+
+// ─── Painel de Fatura / Transações ────────────────────────────────────────────
+
+function InvoicePanel({
+   cartao,
+   mesaSelecionadaId,
+}: {
+   cartao: Cartao;
+   mesaSelecionadaId: number;
+}) {
+   const [mesFatura, setMesFatura] = useState(mesAtual());
+   const [despesas, setDespesas] = useState<Despesa[]>([]);
+   const [loading, setLoading] = useState(false);
+   const isCredito = cartao.tipo === "credito";
+
+   const carregar = useCallback(async () => {
+      setLoading(true);
+      try {
+         const todas = await despesaService.listar(
+            mesaSelecionadaId,
+            mesFatura,
+         );
+         setDespesas(todas.filter((d) => d.cartao_id === cartao.id));
+      } catch {
+         // silencioso
+      } finally {
+         setLoading(false);
+      }
+   }, [mesaSelecionadaId, mesFatura, cartao.id]);
+
+   useEffect(() => {
+      carregar();
+   }, [carregar]);
+
+   const totalPago = despesas
+      .filter((d) => d.paga)
+      .reduce(
+         (s, d) => s + parseFloat(String(d.valor_real ?? d.valor_provisionado)),
+         0,
+      );
+
+   const totalAberto = despesas
+      .filter((d) => !d.paga)
+      .reduce((s, d) => s + parseFloat(String(d.valor_provisionado)), 0);
+
+   const idxAtual = MESES.findIndex((m) => m.valor === mesFatura);
+
+   return (
+      <div className="mt-3 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+         {/* Header do painel */}
+         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+               <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: cartao.cor || "#8B5CF6" }}
+               />
+               <span className="text-sm font-semibold text-gray-700">
+                  {isCredito ? "Fatura" : "Transações"} — {cartao.nome}
+               </span>
+            </div>
+            {/* Navegador de mês */}
+            <div className="flex items-center gap-1">
+               <button
+                  onClick={() =>
+                     idxAtual > 0 && setMesFatura(MESES[idxAtual - 1].valor)
+                  }
+                  disabled={idxAtual <= 0}
+                  className="p-1 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30 transition-colors"
+               >
+                  <svg
+                     className="w-4 h-4"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                  >
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                     />
+                  </svg>
+               </button>
+               <select
+                  value={mesFatura}
+                  onChange={(e) => setMesFatura(e.target.value)}
+                  className="text-xs font-medium text-gray-600 bg-transparent border-none focus:outline-none cursor-pointer"
+               >
+                  {MESES.map((m) => (
+                     <option key={m.valor} value={m.valor}>
+                        {m.label}
+                     </option>
+                  ))}
+               </select>
+               <button
+                  onClick={() =>
+                     idxAtual < MESES.length - 1 &&
+                     setMesFatura(MESES[idxAtual + 1].valor)
+                  }
+                  disabled={idxAtual >= MESES.length - 1}
+                  className="p-1 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30 transition-colors"
+               >
+                  <svg
+                     className="w-4 h-4"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                  >
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                     />
+                  </svg>
+               </button>
+            </div>
+         </div>
+
+         {/* Resumo de totais */}
+         {!loading && despesas.length > 0 && (
+            <div className="flex border-b border-gray-100">
+               <div className="flex-1 px-4 py-2.5 text-center border-r border-gray-100">
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                     {isCredito ? "Fatura paga" : "Total debitado"}
+                  </p>
+                  <p className="text-sm font-bold text-green-600">
+                     {formatarValor(totalPago)}
+                  </p>
+               </div>
+               <div className="flex-1 px-4 py-2.5 text-center">
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                     {isCredito ? "Em aberto" : "A vencer"}
+                  </p>
+                  <p
+                     className={`text-sm font-bold ${totalAberto > 0 ? "text-orange-500" : "text-gray-400"}`}
+                  >
+                     {formatarValor(totalAberto)}
+                  </p>
+               </div>
+            </div>
+         )}
+
+         {/* Lista de lançamentos */}
+         <div className="divide-y divide-gray-50">
+            {loading ? (
+               <div className="flex items-center justify-center py-6 text-gray-400 text-sm gap-2">
+                  <svg
+                     className="w-4 h-4 animate-spin"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                  >
+                     <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                     />
+                     <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                     />
+                  </svg>
+                  Carregando...
+               </div>
+            ) : despesas.length === 0 ? (
+               <div className="py-6 text-center text-gray-400 text-sm">
+                  <svg
+                     className="w-8 h-8 mx-auto mb-2 text-gray-200"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                  >
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
+                     />
+                  </svg>
+                  Nenhum lançamento neste mês
+               </div>
+            ) : (
+               despesas.map((d) => (
+                  <div
+                     key={d.id}
+                     className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                     {/* Bullet status */}
+                     <div
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                           d.paga ? "bg-green-500" : "bg-orange-400"
+                        }`}
+                     />
+                     {/* Info */}
+                     <div className="flex-1 min-w-0">
+                        <p
+                           className={`text-sm font-medium truncate ${
+                              d.paga
+                                 ? "line-through text-gray-400"
+                                 : "text-gray-800"
+                           }`}
+                        >
+                           {d.descricao}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                           <span className="text-[10px] text-gray-400">
+                              {formatarData(d.data_vencimento)}
+                           </span>
+                           {d.parcelas > 1 && (
+                              <span className="text-[10px] text-blue-500 font-medium">
+                                 {d.parcela_atual}/{d.parcelas}x
+                              </span>
+                           )}
+                           {d.categoria_nome && (
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                 {d.categoria_nome}
+                              </span>
+                           )}
+                        </div>
+                     </div>
+                     {/* Valor */}
+                     <div className="text-right shrink-0">
+                        <p
+                           className={`text-sm font-semibold ${
+                              d.paga ? "text-green-600" : "text-gray-700"
+                           }`}
+                        >
+                           {formatarValor(
+                              d.paga
+                                 ? (d.valor_real ?? d.valor_provisionado)
+                                 : d.valor_provisionado,
+                           )}
+                        </p>
+                        {d.paga &&
+                           d.valor_real &&
+                           parseFloat(String(d.valor_real)) !==
+                              parseFloat(String(d.valor_provisionado)) && (
+                              <p className="text-[10px] text-gray-400 line-through">
+                                 {formatarValor(d.valor_provisionado)}
+                              </p>
+                           )}
+                     </div>
+                  </div>
+               ))
+            )}
+         </div>
+
+         {/* Rodapé com info de fechamento/vencimento (só crédito) */}
+         {isCredito && (cartao.dia_fechamento || cartao.dia_vencimento) && (
+            <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
+               {cartao.dia_fechamento && (
+                  <span>⏱ Fechamento: dia {cartao.dia_fechamento}</span>
+               )}
+               {cartao.dia_fechamento && cartao.dia_vencimento && (
+                  <span className="text-gray-300">·</span>
+               )}
+               {cartao.dia_vencimento && (
+                  <span>📅 Vencimento: dia {cartao.dia_vencimento}</span>
+               )}
+            </div>
+         )}
+      </div>
+   );
+}
+
 // ─── Card Visual (reutilizado em mobile e desktop) ────────────────────────────
 function CartaoVisual({
    cartao,
+   isSelected,
    onClick,
 }: {
    cartao: Cartao;
+   isSelected?: boolean;
    onClick?: () => void;
 }) {
-   const formatarTipo = (t: string) => (t === "credito" ? "Crédito" : "Débito");
    const limiteParaCalculo = cartao.limite_pessoal || cartao.limite_real;
 
    return (
       <div
          style={{ backgroundColor: cartao.cor || "#8B5CF6" }}
-         className="relative h-44 w-full rounded-2xl shadow-lg p-5 text-white overflow-hidden select-none"
+         className={`relative h-44 w-full rounded-2xl shadow-lg p-5 text-white overflow-hidden select-none cursor-pointer transition-all duration-200 ${
+            isSelected
+               ? "ring-4 ring-white/60 ring-offset-2 ring-offset-gray-100"
+               : ""
+         }`}
          onClick={onClick}
       >
-         {/* Círculos decorativos */}
          <div className="absolute top-0 right-0 w-44 h-44 bg-white/10 rounded-full -mr-16 -mt-16 pointer-events-none" />
          <div className="absolute bottom-0 left-0 w-36 h-36 bg-white/10 rounded-full -ml-14 -mb-14 pointer-events-none" />
 
          <div className="relative h-full flex flex-col justify-between">
-            {/* Topo */}
             <div className="flex items-center justify-between">
                <div className="flex items-center gap-2">
                   <svg
@@ -57,22 +378,27 @@ function CartaoVisual({
                      {cartao.bandeira_nome}
                   </span>
                </div>
-               {!cartao.ativa && (
-                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
-                     Inativo
-                  </span>
-               )}
+               <div className="flex items-center gap-2">
+                  {!cartao.ativa && (
+                     <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                        Inativo
+                     </span>
+                  )}
+                  {isSelected && (
+                     <span className="text-[10px] bg-white/30 px-2 py-0.5 rounded-full font-medium">
+                        ✓ selecionado
+                     </span>
+                  )}
+               </div>
             </div>
 
-            {/* Nome */}
             <div>
                <p className="text-lg font-bold leading-tight">{cartao.nome}</p>
                <p className="text-xs opacity-75 mt-0.5">
-                  {formatarTipo(cartao.tipo)}
+                  {cartao.tipo === "credito" ? "Crédito" : "Débito"}
                </p>
             </div>
 
-            {/* Limite */}
             {limiteParaCalculo ? (
                <div>
                   <div className="flex justify-between text-xs mb-1">
@@ -98,20 +424,28 @@ function WalletStack({
    cartoes,
    onEditar,
    onToggle,
+   mesaSelecionadaId,
 }: {
    cartoes: Cartao[];
    onEditar: (c: Cartao) => void;
    onToggle: (c: Cartao) => void;
+   mesaSelecionadaId: number | undefined;
 }) {
    const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-   const PEEK = 56; // px visível de cada cartão no stack
+   const [showInvoice, setShowInvoice] = useState(false);
+   const PEEK = 56;
 
    const handleCardClick = (idx: number) => {
-      setSelectedIdx(idx === selectedIdx ? null : idx);
+      if (idx === selectedIdx) {
+         setSelectedIdx(null);
+         setShowInvoice(false);
+      } else {
+         setSelectedIdx(idx);
+         setShowInvoice(false);
+      }
    };
 
-   // Altura total do container colapsado
-   const stackHeight = 176 + PEEK * (cartoes.length - 1); // h-44 = 176px
+   const stackHeight = 176 + PEEK * (cartoes.length - 1);
 
    return (
       <div
@@ -119,15 +453,17 @@ function WalletStack({
          style={{ height: selectedIdx !== null ? "auto" : stackHeight }}
       >
          {selectedIdx !== null ? (
-            /* ── Modo expandido: cartão selecionado em destaque ── */
             <div className="flex flex-col gap-3">
-               {/* Cartão selecionado */}
                <div
                   className={`transition-all ${!cartoes[selectedIdx].ativa ? "opacity-50" : ""}`}
                >
                   <CartaoVisual
                      cartao={cartoes[selectedIdx]}
-                     onClick={() => setSelectedIdx(null)}
+                     isSelected
+                     onClick={() => {
+                        setSelectedIdx(null);
+                        setShowInvoice(false);
+                     }}
                   />
                   {/* Botões de ação */}
                   <div className="mt-2.5 flex gap-2">
@@ -149,6 +485,31 @@ function WalletStack({
                            />
                         </svg>
                         Editar
+                     </button>
+                     <button
+                        onClick={() => setShowInvoice(!showInvoice)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl transition-colors text-sm font-semibold ${
+                           showInvoice
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-purple-50 text-purple-600 hover:bg-purple-100"
+                        }`}
+                     >
+                        <svg
+                           className="w-4 h-4"
+                           fill="none"
+                           stroke="currentColor"
+                           viewBox="0 0 24 24"
+                        >
+                           <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
+                           />
+                        </svg>
+                        {cartoes[selectedIdx].tipo === "credito"
+                           ? "Fatura"
+                           : "Transações"}
                      </button>
                      <button
                         onClick={() => onToggle(cartoes[selectedIdx])}
@@ -195,9 +556,17 @@ function WalletStack({
                         )}
                      </button>
                   </div>
+
+                  {/* Painel de fatura/transações */}
+                  {showInvoice && mesaSelecionadaId && (
+                     <InvoicePanel
+                        cartao={cartoes[selectedIdx]}
+                        mesaSelecionadaId={mesaSelecionadaId}
+                     />
+                  )}
                </div>
 
-               {/* Outros cartões abaixo em lista compacta */}
+               {/* Outros cartões em lista compacta */}
                {cartoes.length > 1 && (
                   <div className="mt-1">
                      <p className="text-xs text-gray-400 font-medium mb-2 px-1">
@@ -209,7 +578,10 @@ function WalletStack({
                            return (
                               <button
                                  key={c.id}
-                                 onClick={() => setSelectedIdx(i)}
+                                 onClick={() => {
+                                    setSelectedIdx(i);
+                                    setShowInvoice(false);
+                                 }}
                                  className={`flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-all text-left ${!c.ativa ? "opacity-50" : ""}`}
                               >
                                  <div
@@ -250,12 +622,11 @@ function WalletStack({
                )}
             </div>
          ) : (
-            /* ── Modo stack: cartões empilhados, cada um aparece um pouco ── */
+            /* ── Modo stack colapsado ── */
             <div className="relative" style={{ height: stackHeight }}>
                {cartoes.map((cartao, idx) => {
                   const isTop = idx === cartoes.length - 1;
                   const offsetY = idx * PEEK;
-                  // Escala diminui ligeiramente para os cartões atrás
                   const scale = 1 - (cartoes.length - 1 - idx) * 0.03;
 
                   return (
@@ -273,14 +644,6 @@ function WalletStack({
                         <div className={!cartao.ativa ? "opacity-50" : ""}>
                            <CartaoVisual cartao={cartao} />
                         </div>
-                        {/* Label peek — só aparece quando não é o topo */}
-                        {!isTop && (
-                           <div
-                              className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-5 pb-3"
-                              style={{ pointerEvents: "none" }}
-                           ></div>
-                        )}
-                        {/* Toque para ver — hint no cartão do topo */}
                         {isTop && (
                            <div className="absolute bottom-3 right-4 flex items-center gap-1 pointer-events-none">
                               <span className="text-[10px] text-white/60">
@@ -300,12 +663,19 @@ function WalletStack({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function CartoesPage() {
    const router = useRouter();
+   const { mesaSelecionada, carregando: mesaCarregando } = useMesa();
+
    const [cartoes, setCartoes] = useState<Cartao[]>([]);
    const [bandeiras, setBandeiras] = useState<Bandeira[]>([]);
    const [loading, setLoading] = useState(true);
    const [mostrarInativas, setMostrarInativas] = useState(false);
    const [modalAberto, setModalAberto] = useState(false);
    const [editando, setEditando] = useState<Cartao | null>(null);
+
+   // Controle do painel expandido no desktop
+   const [cartaoExpandidoId, setCartaoExpandidoId] = useState<number | null>(
+      null,
+   );
 
    const [nome, setNome] = useState("");
    const [tipo, setTipo] = useState<"credito" | "debito">("credito");
@@ -323,8 +693,9 @@ export default function CartoesPage() {
          router.push("/login");
          return;
       }
+      if (mesaCarregando) return;
       carregarDados();
-   }, [router, mostrarInativas]);
+   }, [router, mostrarInativas, mesaCarregando]);
 
    const carregarDados = async () => {
       try {
@@ -439,6 +810,10 @@ export default function CartoesPage() {
       }
    };
 
+   const toggleExpandido = (cartaoId: number) => {
+      setCartaoExpandidoId((prev) => (prev === cartaoId ? null : cartaoId));
+   };
+
    if (loading) {
       return (
          <DashboardLayout>
@@ -494,7 +869,7 @@ export default function CartoesPage() {
                </div>
             )}
 
-            {/* Toggle */}
+            {/* Toggle inativas */}
             <div className="flex items-center justify-end">
                <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -539,84 +914,125 @@ export default function CartoesPage() {
                         cartoes={cartoes}
                         onEditar={abrirModal}
                         onToggle={toggleAtiva}
+                        mesaSelecionadaId={mesaSelecionada?.id}
                      />
                   </div>
 
-                  {/* ── DESKTOP: flex wrap com largura fixa ── */}
+                  {/* ── DESKTOP: flex wrap com painel dropdown ── */}
                   <div className="hidden sm:flex flex-wrap gap-5">
-                     {cartoes.map((cartao) => (
-                        <div
-                           key={cartao.id}
-                           className={`relative w-72 shrink-0 ${!cartao.ativa ? "opacity-50" : ""}`}
-                        >
-                           <CartaoVisual cartao={cartao} />
-                           <div className="mt-2.5 flex gap-2">
-                              <button
-                                 onClick={() => abrirModal(cartao)}
-                                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-                              >
-                                 <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
+                     {cartoes.map((cartao) => {
+                        const isExpandido = cartaoExpandidoId === cartao.id;
+                        return (
+                           <div
+                              key={cartao.id}
+                              className={`relative w-72 shrink-0 ${!cartao.ativa ? "opacity-50" : ""}`}
+                           >
+                              <CartaoVisual
+                                 cartao={cartao}
+                                 isSelected={isExpandido}
+                                 onClick={() => toggleExpandido(cartao.id)}
+                              />
+                              <div className="mt-2.5 flex gap-2">
+                                 <button
+                                    onClick={() => abrirModal(cartao)}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
                                  >
-                                    <path
-                                       strokeLinecap="round"
-                                       strokeLinejoin="round"
-                                       strokeWidth={2}
-                                       d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                    />
-                                 </svg>
-                                 Editar
-                              </button>
-                              <button
-                                 onClick={() => toggleAtiva(cartao)}
-                                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
-                                    cartao.ativa
-                                       ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                       : "bg-green-50 text-green-600 hover:bg-green-100"
-                                 }`}
-                              >
-                                 {cartao.ativa ? (
-                                    <>
-                                       <svg
-                                          className="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                       >
-                                          <path
-                                             strokeLinecap="round"
-                                             strokeLinejoin="round"
-                                             strokeWidth={2}
-                                             d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                                          />
-                                       </svg>
-                                       Inativar
-                                    </>
-                                 ) : (
-                                    <>
-                                       <svg
-                                          className="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                       >
-                                          <path
-                                             strokeLinecap="round"
-                                             strokeLinejoin="round"
-                                             strokeWidth={2}
-                                             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                          />
-                                       </svg>
-                                       Reativar
-                                    </>
-                                 )}
-                              </button>
+                                    <svg
+                                       className="w-4 h-4"
+                                       fill="none"
+                                       stroke="currentColor"
+                                       viewBox="0 0 24 24"
+                                    >
+                                       <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                       />
+                                    </svg>
+                                    Editar
+                                 </button>
+                                 <button
+                                    onClick={() => toggleExpandido(cartao.id)}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                       isExpandido
+                                          ? "bg-purple-100 text-purple-700"
+                                          : "bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                    }`}
+                                 >
+                                    <svg
+                                       className="w-4 h-4"
+                                       fill="none"
+                                       stroke="currentColor"
+                                       viewBox="0 0 24 24"
+                                    >
+                                       <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
+                                       />
+                                    </svg>
+                                    {cartao.tipo === "credito"
+                                       ? "Fatura"
+                                       : "Transações"}
+                                 </button>
+                                 <button
+                                    onClick={() => toggleAtiva(cartao)}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                       cartao.ativa
+                                          ? "bg-red-50 text-red-600 hover:bg-red-100"
+                                          : "bg-green-50 text-green-600 hover:bg-green-100"
+                                    }`}
+                                 >
+                                    {cartao.ativa ? (
+                                       <>
+                                          <svg
+                                             className="w-4 h-4"
+                                             fill="none"
+                                             stroke="currentColor"
+                                             viewBox="0 0 24 24"
+                                          >
+                                             <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                                             />
+                                          </svg>
+                                          Inativar
+                                       </>
+                                    ) : (
+                                       <>
+                                          <svg
+                                             className="w-4 h-4"
+                                             fill="none"
+                                             stroke="currentColor"
+                                             viewBox="0 0 24 24"
+                                          >
+                                             <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                             />
+                                          </svg>
+                                          Reativar
+                                       </>
+                                    )}
+                                 </button>
+                              </div>
+
+                              {/* Painel dropdown de fatura/transações */}
+                              {isExpandido && mesaSelecionada && (
+                                 <InvoicePanel
+                                    cartao={cartao}
+                                    mesaSelecionadaId={mesaSelecionada.id}
+                                 />
+                              )}
                            </div>
-                        </div>
-                     ))}
+                        );
+                     })}
                   </div>
                </>
             )}

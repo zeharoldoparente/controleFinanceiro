@@ -17,6 +17,7 @@ export interface Despesa {
    parcelas: number;
    parcela_atual: number;
    parcela_grupo_id: string;
+   fatura_id: number | null; // NOVO: se preenchido, é despesa de cartão de crédito
    categoria_id: number | null;
    categoria_nome: string | null;
    tipo_pagamento_id: number | null;
@@ -31,7 +32,7 @@ export interface DespesaCreate {
    mesa_id: number;
    descricao: string;
    tipo: TipoDespesa;
-   valor_provisionado: number;
+   valor_total: number; // NOVO: valor total (sistema divide por parcelas)
    data_vencimento: string;
    categoria_id?: number;
    tipo_pagamento_id?: number;
@@ -48,22 +49,30 @@ const despesaService = {
       return res.data.despesas;
    },
 
-   async criar(data: DespesaCreate): Promise<void> {
-      await api.post("/despesas", data);
+   async buscar(id: number, mesaId: number): Promise<Despesa> {
+      const res = await api.get(`/despesas/${id}`, {
+         params: { mesa_id: mesaId },
+      });
+      return res.data.despesa;
+   },
+
+   async criar(
+      data: DespesaCreate,
+   ): Promise<{ ids: number[]; despesaId: number }> {
+      const res = await api.post("/despesas", data);
+      return res.data;
    },
 
    async atualizar(id: number, data: Partial<DespesaCreate>): Promise<void> {
       await api.put(`/despesas/${id}`, data);
    },
 
-   // Suporta comprovante via FormData quando arquivo for enviado
    async marcarComoPaga(
       id: number,
       mesaId: number,
       valorReal?: number,
       arquivo?: File | null,
    ): Promise<void> {
-      // Data LOCAL para evitar bug de fuso horário (toISOString usa UTC)
       const d = new Date();
       const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -100,7 +109,6 @@ const despesaService = {
       return URL.createObjectURL(res.data);
    },
 
-   // mes formato: "YYYY-MM" — despesa para de aparecer a partir deste mês (inclusive)
    async cancelarRecorrencia(
       id: number,
       mesaId: number,
@@ -130,6 +138,24 @@ const despesaService = {
          params: { mesa_id: mesaId },
       });
       return res.data.despesas;
+   },
+
+   /** Lista todas as mesas (para relatórios) — exclui despesas de cartão (tratadas pelas faturas) */
+   listarTodas: async (mes?: string): Promise<Despesa[]> => {
+      const mesaService = (await import("./mesaService")).default;
+      const mesas = await mesaService.listar();
+      const todasDespesas: Despesa[] = [];
+      for (const mesa of mesas) {
+         const params: Record<string, string> = { mesa_id: String(mesa.id) };
+         if (mes) params.mes = mes;
+         const res = await api.get("/despesas", { params });
+         todasDespesas.push(...res.data.despesas);
+      }
+      return todasDespesas.sort(
+         (a, b) =>
+            new Date(a.data_vencimento).getTime() -
+            new Date(b.data_vencimento).getTime(),
+      );
    },
 };
 

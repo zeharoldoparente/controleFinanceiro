@@ -70,6 +70,7 @@ const mesaRoutes = require("./src/routes/mesaRoutes");
 const mesaMembroRoutes = require("./src/routes/mesaMembroRoutes");
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
 const contaRoutes = require("./src/routes/contaRoutes");
+const faturaRoutes = require("./src/routes/faturaRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/categorias", categoriaRoutes);
@@ -85,6 +86,7 @@ app.use("/api/mesa/:mesa_id/membros", mesaMembroRoutes);
 app.use("/api/mesa", mesaRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/conta", contaRoutes);
+app.use("/api/faturas", faturaRoutes);
 
 app.get("/", (req, res) => {
    res.json({ message: "API do Controle Financeiro funcionando!" });

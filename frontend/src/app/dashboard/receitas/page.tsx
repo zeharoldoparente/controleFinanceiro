@@ -289,7 +289,7 @@ export default function ReceitasPage() {
          const receitaData: ReceitaCreate = {
             mesa_id: mesaSelecionada.id,
             descricao,
-            valor: parseFloat(valor),
+            valor: parseFloat(valor) / (recorrente ? 1 : parcelas),
             data_recebimento: dataRecebimento,
             categoria_id: categoriaId ? Number(categoriaId) : undefined,
             tipo_pagamento_id: tipoPagamentoId
@@ -305,9 +305,10 @@ export default function ReceitasPage() {
          } else {
             const res = await receitaService.criar(receitaData);
             const qtd = res.ids?.length || 1;
+            const valorParcela = parseFloat(valor) / parcelas;
             setSucesso(
                qtd > 1
-                  ? `${qtd} parcelas criadas com sucesso!`
+                  ? `${qtd} parcelas criadas! (${formatarValor(valorParcela)} cada)`
                   : "Receita criada!",
             );
          }
@@ -1034,7 +1035,7 @@ export default function ReceitasPage() {
                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                  {parcelas > 1
-                                    ? "Valor por parcela *"
+                                    ? "Valor total *"
                                     : "Valor provisionado *"}
                               </label>
                               <input
@@ -1045,6 +1046,17 @@ export default function ReceitasPage() {
                                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                  placeholder="0,00"
                               />
+                              {parcelas > 1 &&
+                                 valor &&
+                                 parseFloat(valor) > 0 && (
+                                    <p className="text-xs text-green-600 mt-1">
+                                       ={" "}
+                                       {formatarValor(
+                                          parseFloat(valor) / parcelas,
+                                       )}{" "}
+                                       por parcela
+                                    </p>
+                                 )}
                            </div>
                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1141,7 +1153,9 @@ export default function ReceitasPage() {
                                     <span className="text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">
                                        {parcelas}x de{" "}
                                        {valor
-                                          ? formatarValor(parseFloat(valor))
+                                          ? formatarValor(
+                                               parseFloat(valor) / parcelas,
+                                            )
                                           : "R$ 0,00"}
                                     </span>
                                  )}
@@ -1187,7 +1201,9 @@ export default function ReceitasPage() {
                                  <p className="text-xs text-green-600 mt-2">
                                     {parcelas} lançamentos de{" "}
                                     {valor
-                                       ? formatarValor(parseFloat(valor))
+                                       ? formatarValor(
+                                            parseFloat(valor) / parcelas,
+                                         )
                                        : "R$ 0,00"}{" "}
                                     — 1 por mês a partir de{" "}
                                     {dataRecebimento
