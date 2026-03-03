@@ -41,7 +41,7 @@ class DespesaController {
                .json({ error: "Você não tem acesso a esta mesa" });
 
          if (cartao_id) {
-            const cartao = await Cartao.findById(cartao_id);
+            const cartao = await Cartao.findById(cartao_id, userId);
             if (!cartao || !cartao.ativa)
                return res
                   .status(400)

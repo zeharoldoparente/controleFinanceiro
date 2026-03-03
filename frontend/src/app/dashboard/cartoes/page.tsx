@@ -6,6 +6,10 @@ import authService from "@/services/authService";
 import cartaoService, { Cartao, CartaoCreate } from "@/services/cartaoService";
 import bandeiraService, { Bandeira } from "@/services/bandeiraService";
 import despesaService, { Despesa } from "@/services/despesaService";
+import faturaService, {
+   Fatura,
+   FaturaLancamento,
+} from "@/services/faturaService";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useMesa } from "@/contexts/MesaContext";
 import { isApiError } from "@/types";
@@ -81,37 +85,120 @@ function InvoicePanel({
    mesaSelecionadaId: number;
 }) {
    const [mesFatura, setMesFatura] = useState(mesAtual());
-   const [despesas, setDespesas] = useState<Despesa[]>([]);
    const [loading, setLoading] = useState(false);
    const isCredito = cartao.tipo === "credito";
 
+   // ── Estado para CRÉDITO (dados da fatura) ──
+   const [faturaAtual, setFaturaAtual] = useState<Fatura | null>(null);
+   const [lancamentos, setLancamentos] = useState<FaturaLancamento[]>([]);
+
+   // ── Estado para DÉBITO (despesas normais) ──
+   const [despesasDebito, setDespesasDebito] = useState<Despesa[]>([]);
+
+   // ── Estado para ações de pagamento ──
+   const [loadingAcao, setLoadingAcao] = useState(false);
+   const [msgSucesso, setMsgSucesso] = useState("");
+
    const carregar = useCallback(async () => {
       setLoading(true);
+      setFaturaAtual(null);
+      setLancamentos([]);
+      setDespesasDebito([]);
+      setMsgSucesso("");
+
       try {
-         const todas = await despesaService.listar(
-            mesaSelecionadaId,
-            mesFatura,
-         );
-         setDespesas(todas.filter((d) => d.cartao_id === cartao.id));
+         if (isCredito) {
+            // ── CRÉDITO: busca faturas do cartão, encontra a do mês ──
+            const faturas = await faturaService.listarPorCartao(
+               cartao.id,
+               mesaSelecionadaId,
+            );
+
+            // Encontra a fatura cujo mes_referencia bate com o mês selecionado
+            // O mes_referencia é "YYYY-MM-01", comparamos com "YYYY-MM"
+            const faturaDoMes = faturas.find((f) => {
+               const mesRef = String(f.mes_referencia).substring(0, 7);
+               return mesRef === mesFatura;
+            });
+
+            // Também tenta pelo data_vencimento (caso o filtro do backend use isso)
+            const faturaByVenc =
+               faturaDoMes ??
+               faturas.find((f) => {
+                  const mesVenc = String(f.data_vencimento).substring(0, 7);
+                  return mesVenc === mesFatura;
+               });
+
+            if (faturaByVenc) {
+               // Busca detalhes completos com lançamentos
+               const detalhe = await faturaService.detalhar(
+                  faturaByVenc.id,
+                  mesaSelecionadaId,
+               );
+               setFaturaAtual(detalhe);
+               setLancamentos(detalhe.lancamentos || []);
+            }
+         } else {
+            // ── DÉBITO: busca despesas normais filtradas pelo cartão ──
+            const todas = await despesaService.listar(
+               mesaSelecionadaId,
+               mesFatura,
+            );
+            setDespesasDebito(todas.filter((d) => d.cartao_id === cartao.id));
+         }
       } catch {
          // silencioso
       } finally {
          setLoading(false);
       }
-   }, [mesaSelecionadaId, mesFatura, cartao.id]);
+   }, [mesaSelecionadaId, mesFatura, cartao.id, isCredito]);
 
    useEffect(() => {
       carregar();
    }, [carregar]);
 
-   const totalPago = despesas
+   // ── Ações de fatura ──
+   const handlePagarFatura = async () => {
+      if (!faturaAtual) return;
+      setLoadingAcao(true);
+      try {
+         await faturaService.pagar(faturaAtual.id, mesaSelecionadaId);
+         setMsgSucesso("Fatura paga com sucesso!");
+         setTimeout(() => setMsgSucesso(""), 3000);
+         carregar();
+      } catch {
+         // erro silencioso
+      } finally {
+         setLoadingAcao(false);
+      }
+   };
+
+   const handleDesfazerPagamento = async () => {
+      if (!faturaAtual) return;
+      setLoadingAcao(true);
+      try {
+         await faturaService.desfazerPagamento(
+            faturaAtual.id,
+            mesaSelecionadaId,
+         );
+         setMsgSucesso("Pagamento desfeito!");
+         setTimeout(() => setMsgSucesso(""), 3000);
+         carregar();
+      } catch {
+         // erro silencioso
+      } finally {
+         setLoadingAcao(false);
+      }
+   };
+
+   // ── Totais para DÉBITO (mesmo cálculo antigo) ──
+   const totalPagoDebito = despesasDebito
       .filter((d) => d.paga)
       .reduce(
          (s, d) => s + parseFloat(String(d.valor_real ?? d.valor_provisionado)),
          0,
       );
-
-   const totalAberto = despesas
+   const totalAbertoDebito = despesasDebito
       .filter((d) => !d.paga)
       .reduce((s, d) => s + parseFloat(String(d.valor_provisionado)), 0);
 
@@ -189,137 +276,329 @@ function InvoicePanel({
             </div>
          </div>
 
-         {/* Resumo de totais */}
-         {!loading && despesas.length > 0 && (
-            <div className="flex border-b border-gray-100">
-               <div className="flex-1 px-4 py-2.5 text-center border-r border-gray-100">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">
-                     {isCredito ? "Fatura paga" : "Total debitado"}
-                  </p>
-                  <p className="text-sm font-bold text-green-600">
-                     {formatarValor(totalPago)}
-                  </p>
-               </div>
-               <div className="flex-1 px-4 py-2.5 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">
-                     {isCredito ? "Em aberto" : "A vencer"}
-                  </p>
-                  <p
-                     className={`text-sm font-bold ${totalAberto > 0 ? "text-orange-500" : "text-gray-400"}`}
-                  >
-                     {formatarValor(totalAberto)}
-                  </p>
-               </div>
+         {/* ── Mensagem de sucesso ── */}
+         {msgSucesso && (
+            <div className="px-4 py-2 bg-green-50 text-green-700 text-xs font-medium border-b border-green-100">
+               ✓ {msgSucesso}
             </div>
          )}
 
-         {/* Lista de lançamentos */}
-         <div className="divide-y divide-gray-50">
-            {loading ? (
-               <div className="flex items-center justify-center py-6 text-gray-400 text-sm gap-2">
-                  <svg
-                     className="w-4 h-4 animate-spin"
-                     fill="none"
-                     viewBox="0 0 24 24"
-                  >
-                     <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                     />
-                     <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                     />
-                  </svg>
-                  Carregando...
-               </div>
-            ) : despesas.length === 0 ? (
-               <div className="py-6 text-center text-gray-400 text-sm">
-                  <svg
-                     className="w-8 h-8 mx-auto mb-2 text-gray-200"
-                     fill="none"
-                     stroke="currentColor"
-                     viewBox="0 0 24 24"
-                  >
-                     <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
-                     />
-                  </svg>
-                  Nenhum lançamento neste mês
-               </div>
-            ) : (
-               despesas.map((d) => (
-                  <div
-                     key={d.id}
-                     className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
-                  >
-                     {/* Bullet status */}
-                     <div
-                        className={`w-2 h-2 rounded-full shrink-0 ${
-                           d.paga ? "bg-green-500" : "bg-orange-400"
-                        }`}
-                     />
-                     {/* Info */}
-                     <div className="flex-1 min-w-0">
-                        <p
-                           className={`text-sm font-medium truncate ${
-                              d.paga
-                                 ? "line-through text-gray-400"
-                                 : "text-gray-800"
-                           }`}
-                        >
-                           {d.descricao}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                           <span className="text-[10px] text-gray-400">
-                              {formatarData(d.data_vencimento)}
-                           </span>
-                           {d.parcelas > 1 && (
-                              <span className="text-[10px] text-blue-500 font-medium">
-                                 {d.parcela_atual}/{d.parcelas}x
-                              </span>
-                           )}
-                           {d.categoria_nome && (
-                              <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                                 {d.categoria_nome}
-                              </span>
-                           )}
+         {/* ══════════ CRÉDITO: Fatura ══════════ */}
+         {isCredito && !loading && (
+            <>
+               {faturaAtual ? (
+                  <>
+                     {/* Resumo da fatura */}
+                     <div className="flex border-b border-gray-100">
+                        <div className="flex-1 px-4 py-2.5 text-center border-r border-gray-100">
+                           <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                              {faturaAtual.status === "paga"
+                                 ? "Fatura paga"
+                                 : "Total da fatura"}
+                           </p>
+                           <p
+                              className={`text-sm font-bold ${
+                                 faturaAtual.status === "paga"
+                                    ? "text-green-600"
+                                    : "text-gray-700"
+                              }`}
+                           >
+                              {formatarValor(
+                                 faturaAtual.status === "paga"
+                                    ? (faturaAtual.valor_real ??
+                                         faturaAtual.valor_total)
+                                    : faturaAtual.valor_total,
+                              )}
+                           </p>
+                        </div>
+                        <div className="flex-1 px-4 py-2.5 text-center border-r border-gray-100">
+                           <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                              Vencimento
+                           </p>
+                           <p className="text-sm font-bold text-gray-600">
+                              {formatarData(
+                                 String(faturaAtual.data_vencimento),
+                              )}
+                           </p>
+                        </div>
+                        <div className="flex-1 px-4 py-2.5 text-center">
+                           <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                              Status
+                           </p>
+                           <p
+                              className={`text-sm font-bold ${
+                                 faturaAtual.status === "paga"
+                                    ? "text-green-600"
+                                    : faturaAtual.status === "fechada"
+                                      ? "text-orange-500"
+                                      : "text-violet-600"
+                              }`}
+                           >
+                              {faturaAtual.status === "paga"
+                                 ? "✓ Paga"
+                                 : faturaAtual.status === "fechada"
+                                   ? "Fechada"
+                                   : "Aberta"}
+                           </p>
                         </div>
                      </div>
-                     {/* Valor */}
-                     <div className="text-right shrink-0">
-                        <p
-                           className={`text-sm font-semibold ${
-                              d.paga ? "text-green-600" : "text-gray-700"
-                           }`}
-                        >
-                           {formatarValor(
-                              d.paga
-                                 ? (d.valor_real ?? d.valor_provisionado)
-                                 : d.valor_provisionado,
-                           )}
+
+                     {/* Botão pagar / desfazer fatura */}
+                     <div className="px-4 py-2.5 border-b border-gray-100">
+                        {faturaAtual.status !== "paga" ? (
+                           <button
+                              onClick={handlePagarFatura}
+                              disabled={
+                                 loadingAcao ||
+                                 parseFloat(String(faturaAtual.valor_total)) ===
+                                    0
+                              }
+                              className="w-full py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                           >
+                              {loadingAcao
+                                 ? "Processando..."
+                                 : `Pagar fatura — ${formatarValor(faturaAtual.valor_total)}`}
+                           </button>
+                        ) : (
+                           <button
+                              onClick={handleDesfazerPagamento}
+                              disabled={loadingAcao}
+                              className="w-full py-2 bg-amber-500 text-white rounded-lg text-xs font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50"
+                           >
+                              {loadingAcao
+                                 ? "Processando..."
+                                 : "Desfazer pagamento da fatura"}
+                           </button>
+                        )}
+                     </div>
+
+                     {/* Lista de lançamentos */}
+                     <div className="divide-y divide-gray-50">
+                        {lancamentos.length === 0 ? (
+                           <div className="py-6 text-center text-gray-400 text-sm">
+                              Nenhum lançamento nesta fatura
+                           </div>
+                        ) : (
+                           <>
+                              <div className="px-4 py-2 bg-gray-50/50">
+                                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">
+                                    {lancamentos.length} lançamento
+                                    {lancamentos.length !== 1 ? "s" : ""}
+                                 </p>
+                              </div>
+                              {lancamentos.map((l) => (
+                                 <div
+                                    key={l.id}
+                                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                                 >
+                                    <div
+                                       className={`w-2 h-2 rounded-full shrink-0 ${
+                                          l.paga
+                                             ? "bg-green-500"
+                                             : "bg-orange-400"
+                                       }`}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                       <p
+                                          className={`text-sm font-medium truncate ${
+                                             l.paga
+                                                ? "line-through text-gray-400"
+                                                : "text-gray-800"
+                                          }`}
+                                       >
+                                          {l.descricao}
+                                       </p>
+                                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                          <span className="text-[10px] text-gray-400">
+                                             {formatarData(l.data_vencimento)}
+                                          </span>
+                                          {l.parcelas > 1 && (
+                                             <span className="text-[10px] text-blue-500 font-medium">
+                                                {l.parcela_atual}/{l.parcelas}x
+                                             </span>
+                                          )}
+                                          {l.categoria_nome && (
+                                             <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                {l.categoria_nome}
+                                             </span>
+                                          )}
+                                       </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                       <p
+                                          className={`text-sm font-semibold ${
+                                             l.paga
+                                                ? "text-green-600"
+                                                : "text-gray-700"
+                                          }`}
+                                       >
+                                          {formatarValor(l.valor_provisionado)}
+                                       </p>
+                                    </div>
+                                 </div>
+                              ))}
+                           </>
+                        )}
+                     </div>
+                  </>
+               ) : (
+                  /* Nenhuma fatura para este mês */
+                  <div className="py-6 text-center text-gray-400 text-sm">
+                     <svg
+                        className="w-8 h-8 mx-auto mb-2 text-gray-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                     >
+                        <path
+                           strokeLinecap="round"
+                           strokeLinejoin="round"
+                           strokeWidth={1.5}
+                           d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
+                        />
+                     </svg>
+                     Nenhuma fatura neste mês
+                  </div>
+               )}
+            </>
+         )}
+
+         {/* ══════════ DÉBITO: Transações (mantém lógica original) ══════════ */}
+         {!isCredito && !loading && (
+            <>
+               {despesasDebito.length > 0 && (
+                  <div className="flex border-b border-gray-100">
+                     <div className="flex-1 px-4 py-2.5 text-center border-r border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                           Total debitado
                         </p>
-                        {d.paga &&
-                           d.valor_real &&
-                           parseFloat(String(d.valor_real)) !==
-                              parseFloat(String(d.valor_provisionado)) && (
-                              <p className="text-[10px] text-gray-400 line-through">
-                                 {formatarValor(d.valor_provisionado)}
-                              </p>
-                           )}
+                        <p className="text-sm font-bold text-green-600">
+                           {formatarValor(totalPagoDebito)}
+                        </p>
+                     </div>
+                     <div className="flex-1 px-4 py-2.5 text-center">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                           A vencer
+                        </p>
+                        <p
+                           className={`text-sm font-bold ${totalAbertoDebito > 0 ? "text-orange-500" : "text-gray-400"}`}
+                        >
+                           {formatarValor(totalAbertoDebito)}
+                        </p>
                      </div>
                   </div>
-               ))
-            )}
-         </div>
+               )}
+
+               <div className="divide-y divide-gray-50">
+                  {despesasDebito.length === 0 ? (
+                     <div className="py-6 text-center text-gray-400 text-sm">
+                        <svg
+                           className="w-8 h-8 mx-auto mb-2 text-gray-200"
+                           fill="none"
+                           stroke="currentColor"
+                           viewBox="0 0 24 24"
+                        >
+                           <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
+                           />
+                        </svg>
+                        Nenhum lançamento neste mês
+                     </div>
+                  ) : (
+                     despesasDebito.map((d) => (
+                        <div
+                           key={d.id}
+                           className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                        >
+                           <div
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                 d.paga ? "bg-green-500" : "bg-orange-400"
+                              }`}
+                           />
+                           <div className="flex-1 min-w-0">
+                              <p
+                                 className={`text-sm font-medium truncate ${
+                                    d.paga
+                                       ? "line-through text-gray-400"
+                                       : "text-gray-800"
+                                 }`}
+                              >
+                                 {d.descricao}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                 <span className="text-[10px] text-gray-400">
+                                    {formatarData(d.data_vencimento)}
+                                 </span>
+                                 {d.parcelas > 1 && (
+                                    <span className="text-[10px] text-blue-500 font-medium">
+                                       {d.parcela_atual}/{d.parcelas}x
+                                    </span>
+                                 )}
+                                 {d.categoria_nome && (
+                                    <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                       {d.categoria_nome}
+                                    </span>
+                                 )}
+                              </div>
+                           </div>
+                           <div className="text-right shrink-0">
+                              <p
+                                 className={`text-sm font-semibold ${
+                                    d.paga ? "text-green-600" : "text-gray-700"
+                                 }`}
+                              >
+                                 {formatarValor(
+                                    d.paga
+                                       ? (d.valor_real ?? d.valor_provisionado)
+                                       : d.valor_provisionado,
+                                 )}
+                              </p>
+                              {d.paga &&
+                                 d.valor_real &&
+                                 parseFloat(String(d.valor_real)) !==
+                                    parseFloat(
+                                       String(d.valor_provisionado),
+                                    ) && (
+                                    <p className="text-[10px] text-gray-400 line-through">
+                                       {formatarValor(d.valor_provisionado)}
+                                    </p>
+                                 )}
+                           </div>
+                        </div>
+                     ))
+                  )}
+               </div>
+            </>
+         )}
+
+         {/* ── Loading ── */}
+         {loading && (
+            <div className="flex items-center justify-center py-6 text-gray-400 text-sm gap-2">
+               <svg
+                  className="w-4 h-4 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+               >
+                  <circle
+                     className="opacity-25"
+                     cx="12"
+                     cy="12"
+                     r="10"
+                     stroke="currentColor"
+                     strokeWidth="4"
+                  />
+                  <path
+                     className="opacity-75"
+                     fill="currentColor"
+                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+               </svg>
+               Carregando...
+            </div>
+         )}
 
          {/* Rodapé com info de fechamento/vencimento (só crédito) */}
          {isCredito && (cartao.dia_fechamento || cartao.dia_vencimento) && (
