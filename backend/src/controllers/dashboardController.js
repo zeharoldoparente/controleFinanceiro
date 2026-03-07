@@ -38,7 +38,6 @@ class DashboardController {
          const ph = mesaIds.map(() => "?").join(",");
 
          // ── 2. Receitas confirmadas do mês ───────────────────────────────────
-         // status = 'recebida' (campo adicionado na migration v2)
          const [[receitasConfirmadas]] = await db.query(
             `SELECT
                COALESCE(SUM(COALESCE(valor_real, valor)), 0) AS confirmado,
@@ -51,7 +50,6 @@ class DashboardController {
             [...mesaIds, mesFiltro],
          );
 
-         // Receitas normais a receber no mês
          const [[receitasPendentes]] = await db.query(
             `SELECT COALESCE(SUM(valor), 0) AS pendente
              FROM receitas
@@ -63,7 +61,6 @@ class DashboardController {
             [...mesaIds, mesFiltro],
          );
 
-         // Recorrentes sem confirmação no mês
          const [[receitasRecorrentes]] = await db.query(
             `SELECT COALESCE(SUM(r.valor), 0) AS pendente_recorrente
              FROM receitas r
@@ -86,7 +83,6 @@ class DashboardController {
             parseFloat(receitasRecorrentes.pendente_recorrente);
 
          // ── 3. Despesas pagas do mês ─────────────────────────────────────────
-         // Despesas usam campo `paga` (boolean) + `valor_provisionado` + `valor_real`
          const [[despesasPagas]] = await db.query(
             `SELECT
                COALESCE(SUM(COALESCE(valor_real, valor_provisionado)), 0) AS pago,
@@ -100,7 +96,6 @@ class DashboardController {
             [...mesaIds, mesFiltro],
          );
 
-         // Despesas não pagas no mês (normais + recorrentes)
          const [[despesasPendentes]] = await db.query(
             `SELECT
                COALESCE(SUM(valor_provisionado), 0) AS pendente,
@@ -125,7 +120,7 @@ class DashboardController {
             parseFloat(despesasPagas.pago) +
             parseFloat(despesasPendentes.pendente);
 
-         // ── 4. Alertas: despesas vencidas (não pagas com data passada) ───────
+         // ── 4. Alertas ───────────────────────────────────────────────────────
          const [despesasVencidas] = await db.query(
             `SELECT d.id, d.descricao, d.valor_provisionado AS valor, d.data_vencimento,
                     m.nome AS mesa_nome, c.nome AS categoria_nome
@@ -137,13 +132,12 @@ class DashboardController {
                AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
                AND d.data_vencimento < ?
-               AND (d.recorrente = FALSE OR (d.recorrente = TRUE AND DATE_FORMAT(d.data_vencimento, '%Y-%m') <= ?))
+               AND (d.recorrente = FALSE OR DATE_FORMAT(d.data_vencimento, '%Y-%m') <= ?)
              ORDER BY d.data_vencimento ASC
              LIMIT 5`,
             [...mesaIds, hoje, mesFiltro],
          );
 
-         // Despesas que vencem hoje
          const [despesasHoje] = await db.query(
             `SELECT d.id, d.descricao, d.valor_provisionado AS valor, d.data_vencimento,
                     m.nome AS mesa_nome
@@ -159,8 +153,7 @@ class DashboardController {
             [...mesaIds, hoje],
          );
 
-         // ── 5. Cartões: limite vs gasto ──────────────────────────────────────
-         // Cartões pertencem ao user_id, mas as despesas são filtradas pelas mesas do usuário
+         // ── 5. Cartões ───────────────────────────────────────────────────────
          const [cartoes] = await db.query(
             `SELECT
                ca.id, ca.nome, ca.tipo,
@@ -170,24 +163,19 @@ class DashboardController {
                   SELECT SUM(COALESCE(d.valor_real, d.valor_provisionado))
                   FROM despesas d
                   WHERE d.cartao_id = ca.id
-                    AND d.paga = TRUE
-                    AND d.ativa = TRUE
-                    AND d.data_cancelamento IS NULL
+                    AND d.paga = TRUE AND d.ativa = TRUE AND d.data_cancelamento IS NULL
                     AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
                ), 0) AS gasto_mes,
                COALESCE((
                   SELECT SUM(d.valor_provisionado)
                   FROM despesas d
                   WHERE d.cartao_id = ca.id
-                    AND d.paga = FALSE
-                    AND d.ativa = TRUE
-                    AND d.data_cancelamento IS NULL
+                    AND d.paga = FALSE AND d.ativa = TRUE AND d.data_cancelamento IS NULL
                     AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
                ), 0) AS pendente_mes
              FROM cartoes ca
              LEFT JOIN bandeiras b ON ca.bandeira_id = b.id
-             WHERE ca.user_id = ?
-               AND ca.ativa = TRUE
+             WHERE ca.user_id = ? AND ca.ativa = TRUE
              ORDER BY ca.limite_pessoal DESC`,
             [mesFiltro, mesFiltro, userId],
          );
@@ -200,17 +188,23 @@ class DashboardController {
          });
 
          // ── 6. Maiores gastos por categoria ──────────────────────────────────
+         // Inclui despesas normais (pagas) E despesas de cartão de crédito
+         // (registradas no mês, independente de pagamento — são pagas via fatura)
          const [gastosPorCategoria] = await db.query(
             `SELECT
                COALESCE(c.nome, 'Sem categoria') AS categoria,
+               d.categoria_id,
                SUM(COALESCE(d.valor_real, d.valor_provisionado)) AS total
              FROM despesas d
              LEFT JOIN categorias c ON d.categoria_id = c.id
              WHERE d.mesa_id IN (${ph})
-               AND d.paga = TRUE
                AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
                AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+               AND (
+                  (d.cartao_id IS NULL AND d.paga = TRUE)
+                  OR (d.cartao_id IS NOT NULL)
+               )
              GROUP BY d.categoria_id, c.nome
              ORDER BY total DESC
              LIMIT 6`,
@@ -272,29 +266,20 @@ class DashboardController {
 
          // ── 8. Fluxo de caixa diário do mês ──────────────────────────────────
          const [fluxoReceitas] = await db.query(
-            `SELECT DAY(data_recebimento) AS dia,
-                    SUM(COALESCE(valor_real, valor)) AS total
+            `SELECT DAY(data_recebimento) AS dia, SUM(COALESCE(valor_real, valor)) AS total
              FROM receitas
-             WHERE mesa_id IN (${ph})
-               AND status = 'recebida'
-               AND ativa = TRUE
+             WHERE mesa_id IN (${ph}) AND status = 'recebida' AND ativa = TRUE
                AND DATE_FORMAT(data_recebimento, '%Y-%m') = ?
-             GROUP BY DAY(data_recebimento)
-             ORDER BY dia`,
+             GROUP BY DAY(data_recebimento) ORDER BY dia`,
             [...mesaIds, mesFiltro],
          );
 
          const [fluxoDespesas] = await db.query(
-            `SELECT DAY(data_vencimento) AS dia,
-                    SUM(COALESCE(valor_real, valor_provisionado)) AS total
+            `SELECT DAY(data_vencimento) AS dia, SUM(COALESCE(valor_real, valor_provisionado)) AS total
              FROM despesas
-             WHERE mesa_id IN (${ph})
-               AND paga = TRUE
-               AND ativa = TRUE
-               AND data_cancelamento IS NULL
-               AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?
-             GROUP BY DAY(data_vencimento)
-             ORDER BY dia`,
+             WHERE mesa_id IN (${ph}) AND paga = TRUE AND ativa = TRUE
+               AND data_cancelamento IS NULL AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?
+             GROUP BY DAY(data_vencimento) ORDER BY dia`,
             [...mesaIds, mesFiltro],
          );
 
@@ -326,39 +311,28 @@ class DashboardController {
 
          // ── 9. Últimas movimentações ──────────────────────────────────────────
          const [ultimasReceitas] = await db.query(
-            `SELECT
-               r.id, 'receita' AS tipo, r.descricao,
-               r.data_recebimento AS data,
-               COALESCE(r.valor_real, r.valor) AS valor,
-               r.status,
-               c.nome AS categoria_nome, m.nome AS mesa_nome
+            `SELECT r.id, 'receita' AS tipo, r.descricao, r.data_recebimento AS data,
+                    COALESCE(r.valor_real, r.valor) AS valor, r.status,
+                    c.nome AS categoria_nome, m.nome AS mesa_nome
              FROM receitas r
              LEFT JOIN categorias c ON r.categoria_id = c.id
              LEFT JOIN mesas m ON r.mesa_id = m.id
-             WHERE r.mesa_id IN (${ph})
-               AND r.status = 'recebida'
-               AND r.ativa = TRUE
-             ORDER BY r.data_confirmacao DESC, r.data_recebimento DESC
-             LIMIT 10`,
+             WHERE r.mesa_id IN (${ph}) AND r.status = 'recebida' AND r.ativa = TRUE
+             ORDER BY r.data_confirmacao DESC, r.data_recebimento DESC LIMIT 10`,
             [...mesaIds],
          );
 
          const [ultimasDespesas] = await db.query(
-            `SELECT
-               d.id, 'despesa' AS tipo, d.descricao,
-               d.data_pagamento AS data,
-               COALESCE(d.valor_real, d.valor_provisionado) AS valor,
-               IF(d.paga, 'paga', 'pendente') AS status,
-               c.nome AS categoria_nome, m.nome AS mesa_nome
+            `SELECT d.id, 'despesa' AS tipo, d.descricao, d.data_pagamento AS data,
+                    COALESCE(d.valor_real, d.valor_provisionado) AS valor,
+                    IF(d.paga, 'paga', 'pendente') AS status,
+                    c.nome AS categoria_nome, m.nome AS mesa_nome
              FROM despesas d
              LEFT JOIN categorias c ON d.categoria_id = c.id
              LEFT JOIN mesas m ON d.mesa_id = m.id
-             WHERE d.mesa_id IN (${ph})
-               AND d.paga = TRUE
-               AND d.ativa = TRUE
+             WHERE d.mesa_id IN (${ph}) AND d.paga = TRUE AND d.ativa = TRUE
                AND d.data_cancelamento IS NULL
-             ORDER BY d.data_pagamento DESC
-             LIMIT 10`,
+             ORDER BY d.data_pagamento DESC LIMIT 10`,
             [...mesaIds],
          );
 
@@ -391,10 +365,7 @@ class DashboardController {
                   qtd_pagas: parseInt(despesasPagas.qtd_pagas),
                   qtd_pendentes: parseInt(despesasPendentes.qtd_pendentes),
                },
-               saldo: {
-                  real: saldoReal,
-                  previsto: saldoPrevisto,
-               },
+               saldo: { real: saldoReal, previsto: saldoPrevisto },
             },
             alertas: {
                despesas_vencidas: despesasVencidas,
@@ -436,8 +407,9 @@ class DashboardController {
                      : null,
                };
             }),
-            gastos_por_categoria: gastosPorCategoria.map((g, i) => ({
+            gastos_por_categoria: gastosPorCategoria.map((g) => ({
                categoria: g.categoria,
+               categoria_id: g.categoria_id,
                total: parseFloat(g.total),
             })),
             evolucao_mensal: evolucao,
@@ -447,6 +419,96 @@ class DashboardController {
       } catch (error) {
          console.error("Erro no dashboard:", error);
          res.status(500).json({ error: "Erro ao carregar dados do dashboard" });
+      }
+   }
+
+   // ── Detalhes individuais de uma categoria no mês ──────────────────────────
+   // GET /api/dashboard/detalhes-categoria?categoria_id=X&mes=YYYY-MM&mesa_id=Y
+   static async getDetalhesCategoria(req, res) {
+      try {
+         const { categoria_id, mes, mesa_id } = req.query;
+         const userId = req.userId;
+         const mesFiltro = mes || mesAtual();
+
+         let mesas;
+         if (mesa_id) {
+            const mesa = await Mesa.findById(mesa_id, userId);
+            if (!mesa)
+               return res.status(403).json({ error: "Sem acesso a esta mesa" });
+            mesas = [mesa];
+         } else {
+            mesas = await Mesa.findByUserId(userId);
+         }
+
+         if (mesas.length === 0) return res.json({ itens: [] });
+
+         const mesaIds = mesas.map((m) => m.id);
+         const ph = mesaIds.map(() => "?").join(",");
+
+         // categoria_id pode ser null (= "Sem categoria")
+         const categoriaFiltro =
+            categoria_id === "null" ||
+            categoria_id === "" ||
+            categoria_id === undefined
+               ? null
+               : parseInt(categoria_id);
+
+         const categoriaWhere =
+            categoriaFiltro === null
+               ? "d.categoria_id IS NULL"
+               : "d.categoria_id = ?";
+
+         const params =
+            categoriaFiltro === null
+               ? [...mesaIds, mesFiltro]
+               : [...mesaIds, mesFiltro, categoriaFiltro];
+
+         const [itens] = await db.query(
+            `SELECT
+               d.id,
+               d.descricao,
+               COALESCE(d.valor_real, d.valor_provisionado) AS valor,
+               d.data_vencimento,
+               d.parcela_atual,
+               d.parcelas,
+               d.cartao_id,
+               tp.nome AS tipo_pagamento_nome,
+               ca.nome AS cartao_nome,
+               ca.cor  AS cartao_cor
+             FROM despesas d
+             LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+             LEFT JOIN cartoes ca ON d.cartao_id = ca.id
+             WHERE d.mesa_id IN (${ph})
+               AND d.ativa = TRUE
+               AND d.data_cancelamento IS NULL
+               AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+               AND ${categoriaWhere}
+               AND (
+                  (d.cartao_id IS NULL AND d.paga = TRUE)
+                  OR (d.cartao_id IS NOT NULL)
+               )
+             ORDER BY valor DESC`,
+            params,
+         );
+
+         res.json({
+            itens: itens.map((item) => ({
+               id: item.id,
+               descricao: item.descricao,
+               valor: parseFloat(item.valor),
+               data_vencimento: item.data_vencimento,
+               parcela_atual: item.parcela_atual,
+               parcelas: item.parcelas,
+               forma_pagamento: item.cartao_id
+                  ? (item.cartao_nome ?? "Cartão")
+                  : (item.tipo_pagamento_nome ?? "—"),
+               e_cartao: !!item.cartao_id,
+               cartao_cor: item.cartao_cor,
+            })),
+         });
+      } catch (error) {
+         console.error("Erro em getDetalhesCategoria:", error);
+         res.status(500).json({ error: "Erro ao carregar detalhes" });
       }
    }
 }

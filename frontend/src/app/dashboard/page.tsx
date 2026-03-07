@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import authService from "@/services/authService";
-import dashboardService, { DashboardData } from "@/services/dashboardService";
+import dashboardService, {
+   DashboardData,
+   DetalheCategoria,
+} from "@/services/dashboardService";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
    BarChart,
@@ -61,9 +64,8 @@ function fmtValor(v: number) {
 }
 
 function fmtValorCompacto(v: number) {
-   if (Math.abs(v) >= 1000) {
+   if (Math.abs(v) >= 1000)
       return `R$\u00a0${(v / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}k`;
-   }
    return fmtValor(v);
 }
 
@@ -73,7 +75,7 @@ function fmtData(data: string) {
    return `${dia}/${mes}/${ano}`;
 }
 
-// ─── Ícones SVG (monocromáticos) ──────────────────────────────────────────────
+// ─── Ícones SVG ───────────────────────────────────────────────────────────────
 
 const IconReceitas = () => (
    <svg
@@ -90,7 +92,6 @@ const IconReceitas = () => (
       />
    </svg>
 );
-
 const IconDespesas = () => (
    <svg
       className="w-5 h-5"
@@ -106,7 +107,6 @@ const IconDespesas = () => (
       />
    </svg>
 );
-
 const IconSaldo = () => (
    <svg
       className="w-5 h-5"
@@ -122,7 +122,6 @@ const IconSaldo = () => (
       />
    </svg>
 );
-
 const IconAlerta = () => (
    <svg
       className="w-4 h-4"
@@ -138,7 +137,6 @@ const IconAlerta = () => (
       />
    </svg>
 );
-
 const IconCartao = () => (
    <svg
       className="w-5 h-5"
@@ -154,7 +152,6 @@ const IconCartao = () => (
       />
    </svg>
 );
-
 const IconCategoria = () => (
    <svg
       className="w-5 h-5"
@@ -170,7 +167,6 @@ const IconCategoria = () => (
       />
    </svg>
 );
-
 const IconFluxo = () => (
    <svg
       className="w-5 h-5"
@@ -186,8 +182,23 @@ const IconFluxo = () => (
       />
    </svg>
 );
+const IconChevron = ({ open }: { open: boolean }) => (
+   <svg
+      className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+   >
+      <path
+         strokeLinecap="round"
+         strokeLinejoin="round"
+         strokeWidth={2}
+         d="M19 9l-7 7-7-7"
+      />
+   </svg>
+);
 
-// ─── Tooltip customizado dos gráficos ────────────────────────────────────────
+// ─── Tooltip customizado ──────────────────────────────────────────────────────
 
 function TooltipCustom({ active, payload, label }: any) {
    if (!active || !payload?.length) return null;
@@ -203,7 +214,7 @@ function TooltipCustom({ active, payload, label }: any) {
    );
 }
 
-// ─── Barra de progresso de cartão ────────────────────────────────────────────
+// ─── Barra de progresso ───────────────────────────────────────────────────────
 
 function BarraLimite({ percentual, cor }: { percentual: number; cor: string }) {
    const p = Math.min(percentual, 100);
@@ -218,15 +229,11 @@ function BarraLimite({ percentual, cor }: { percentual: number; cor: string }) {
    );
 }
 
-// ─── Skeleton loader ─────────────────────────────────────────────────────────
-
 function Skeleton({ className }: { className?: string }) {
    return (
       <div className={`animate-pulse bg-gray-100 rounded-lg ${className}`} />
    );
 }
-
-// ─── Cores de categoria (fallback palette) ────────────────────────────────────
 
 const CATEGORY_COLORS = [
    "#16a34a",
@@ -238,6 +245,198 @@ const CATEGORY_COLORS = [
    "#9333ea",
    "#65a30d",
 ];
+
+// ─── Card de Maiores Gastos com Dropdown ─────────────────────────────────────
+
+interface GastosCardProps {
+   dados: DashboardData | null;
+   loading: boolean;
+   mes: string;
+   mesaId: number | undefined;
+   categoriaMax: number;
+}
+
+function GastosCard({
+   dados,
+   loading,
+   mes,
+   mesaId,
+   categoriaMax,
+}: GastosCardProps) {
+   const [aberta, setAberta] = useState<string | null>(null);
+   const [detalhes, setDetalhes] = useState<Record<string, DetalheCategoria[]>>(
+      {},
+   );
+   const [loadingDetalhe, setLoadingDetalhe] = useState<string | null>(null);
+   // Fecha dropdown ao trocar de mês
+   const prevMes = useRef(mes);
+   useEffect(() => {
+      if (prevMes.current !== mes) {
+         setAberta(null);
+         setDetalhes({});
+         prevMes.current = mes;
+      }
+   }, [mes]);
+
+   const toggleCategoria = useCallback(
+      async (key: string, categoriaId: number | null) => {
+         if (aberta === key) {
+            setAberta(null);
+            return;
+         }
+         setAberta(key);
+         if (detalhes[key]) return; // já carregou
+         setLoadingDetalhe(key);
+         try {
+            const itens = await dashboardService.getDetalhesCategoria(
+               categoriaId,
+               mes,
+               mesaId,
+            );
+            setDetalhes((prev) => ({ ...prev, [key]: itens }));
+         } catch {
+            setDetalhes((prev) => ({ ...prev, [key]: [] }));
+         } finally {
+            setLoadingDetalhe(null);
+         }
+      },
+      [aberta, detalhes, mes, mesaId],
+   );
+
+   return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5">
+         <div className="flex items-center justify-between mb-3 md:mb-4">
+            <h3 className="text-xs md:text-sm font-semibold text-gray-700">
+               Maiores gastos
+            </h3>
+            <span className="text-gray-400 hidden md:block">
+               <IconCategoria />
+            </span>
+         </div>
+
+         {loading ? (
+            <div className="space-y-2">
+               {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-8" />
+               ))}
+            </div>
+         ) : dados?.gastos_por_categoria.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">
+               Nenhuma despesa neste mês
+            </p>
+         ) : (
+            <div className="space-y-1">
+               {dados?.gastos_por_categoria.map((cat, i) => {
+                  const key = `cat-${cat.categoria_id ?? "null"}`;
+                  const isOpen = aberta === key;
+                  const isLoading = loadingDetalhe === key;
+                  const cor = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+
+                  return (
+                     <div key={key}>
+                        {/* Linha clicável da categoria */}
+                        <button
+                           onClick={() =>
+                              toggleCategoria(key, cat.categoria_id)
+                           }
+                           className="w-full text-left group"
+                        >
+                           <div className="flex items-center justify-between mb-1 py-1 px-1 rounded-lg hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                 <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: cor }}
+                                 />
+                                 <span className="text-xs text-gray-600 truncate">
+                                    {cat.categoria}
+                                 </span>
+                              </div>
+                              <div className="flex items-center gap-2 ml-2 shrink-0">
+                                 <span className="text-xs font-semibold text-gray-700">
+                                    {fmtValorCompacto(cat.total)}
+                                 </span>
+                                 <span className="text-gray-400 group-hover:text-gray-600 transition-colors">
+                                    <IconChevron open={isOpen} />
+                                 </span>
+                              </div>
+                           </div>
+                           <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mb-1">
+                              <div
+                                 className="h-1.5 rounded-full transition-all duration-700"
+                                 style={{
+                                    width: `${Math.round((cat.total / categoriaMax) * 100)}%`,
+                                    backgroundColor: cor,
+                                 }}
+                              />
+                           </div>
+                        </button>
+
+                        {/* Dropdown com lançamentos individuais */}
+                        {isOpen && (
+                           <div className="ml-4 mb-2 border-l-2 border-gray-100 pl-3">
+                              {isLoading ? (
+                                 <div className="space-y-1.5 py-1">
+                                    {[1, 2].map((j) => (
+                                       <Skeleton key={j} className="h-7" />
+                                    ))}
+                                 </div>
+                              ) : detalhes[key]?.length === 0 ? (
+                                 <p className="text-[11px] text-gray-400 py-1.5">
+                                    Nenhum lançamento encontrado
+                                 </p>
+                              ) : (
+                                 <div className="space-y-1 py-1">
+                                    {detalhes[key]?.map((item) => (
+                                       <div
+                                          key={item.id}
+                                          className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
+                                       >
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                             {/* Indicador cartão ou pagamento */}
+                                             {item.e_cartao ? (
+                                                <span
+                                                   className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                   style={{
+                                                      backgroundColor:
+                                                         item.cartao_cor ??
+                                                         "#6b7280",
+                                                   }}
+                                                />
+                                             ) : (
+                                                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-gray-300" />
+                                             )}
+                                             <div className="min-w-0">
+                                                <p className="text-[11px] text-gray-700 truncate leading-tight">
+                                                   {item.descricao}
+                                                   {item.parcelas > 1 && (
+                                                      <span className="text-gray-400 ml-1">
+                                                         {item.parcela_atual}/
+                                                         {item.parcelas}x
+                                                      </span>
+                                                   )}
+                                                </p>
+                                                <p className="text-[10px] text-gray-400 truncate leading-tight">
+                                                   {item.forma_pagamento}
+                                                </p>
+                                             </div>
+                                          </div>
+                                          <span className="text-[11px] font-semibold text-gray-700 ml-2 shrink-0">
+                                             {fmtValorCompacto(item.valor)}
+                                          </span>
+                                       </div>
+                                    ))}
+                                 </div>
+                              )}
+                           </div>
+                        )}
+                     </div>
+                  );
+               })}
+            </div>
+         )}
+      </div>
+   );
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -272,8 +471,6 @@ export default function DashboardPage() {
       carregarDados();
    }, [carregarDados, router]);
 
-   // ─── Computed ─────────────────────────────────────────────────────────────
-
    const totalAlertas = useMemo(() => {
       if (!dados) return 0;
       return (
@@ -288,12 +485,10 @@ export default function DashboardPage() {
       return Math.max(...dados.gastos_por_categoria.map((g) => g.total));
    }, [dados]);
 
-   // ─── Render ───────────────────────────────────────────────────────────────
-
    return (
       <DashboardLayout>
          <div className="space-y-5 md:space-y-6">
-            {/* ── Header ──────────────────────────────────────────────────── */}
+            {/* ── Header ─────────────────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                <div className="flex-1">
                   <h1 className="text-xl md:text-2xl font-bold text-gray-800">
@@ -307,8 +502,6 @@ export default function DashboardPage() {
                      </p>
                   )}
                </div>
-
-               {/* Filtros */}
                <div className="flex items-center gap-2">
                   <select
                      value={mes}
@@ -321,7 +514,6 @@ export default function DashboardPage() {
                         </option>
                      ))}
                   </select>
-
                   {dados && dados.mesas.length > 0 && (
                      <select
                         value={mesaId ?? ""}
@@ -351,11 +543,9 @@ export default function DashboardPage() {
                </div>
             )}
 
-            {/* ── Cards Principais ────────────────────────────────────────── */}
-            {/* Mobile: grid 7 cols — receitas/despesas = 2 cada, saldo = 3 (mais largo) */}
-            {/* Desktop: 3 colunas iguais */}
+            {/* ── Cards Receitas / Despesas / Saldo ───────────────────────── */}
             <div className="grid grid-cols-7 gap-2 md:grid-cols-3 md:gap-4">
-               {/* Receitas — compacto no mobile */}
+               {/* Receitas */}
                <Link
                   href="/dashboard/receitas"
                   className="col-span-2 md:col-span-1 group bg-white rounded-xl shadow-sm border border-gray-100 p-2.5 md:p-5 hover:shadow-md hover:border-green-100 transition-all"
@@ -396,7 +586,7 @@ export default function DashboardPage() {
                   )}
                </Link>
 
-               {/* Despesas — compacto no mobile */}
+               {/* Despesas */}
                <Link
                   href="/dashboard/despesas"
                   className="col-span-2 md:col-span-1 group bg-white rounded-xl shadow-sm border border-gray-100 p-2.5 md:p-5 hover:shadow-md hover:border-red-100 transition-all"
@@ -435,7 +625,7 @@ export default function DashboardPage() {
                   )}
                </Link>
 
-               {/* Saldo — maior no mobile (col-span-3 de 7) */}
+               {/* Saldo */}
                <div className="col-span-3 md:col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 p-2.5 md:p-5">
                   <div className="flex items-center justify-between mb-1.5 md:mb-3">
                      <span className="text-[9px] md:text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -469,7 +659,7 @@ export default function DashboardPage() {
                               <p
                                  className={`text-[8px] mt-0.5 md:hidden truncate ${positivo ? "text-blue-400" : "text-red-400"}`}
                               >
-                                 {positivo ? "positivo" : "negativo"} · prev.{" "}
+                                 {positivo ? "+" : "-"} · prev.{" "}
                                  {fmtValorCompacto(previsto)}
                               </p>
                            </>
@@ -479,7 +669,7 @@ export default function DashboardPage() {
                </div>
             </div>
 
-            {/* ── Previsto × Realizado (full width) ───────────────────────── */}
+            {/* ── Previsto × Realizado ─────────────────────────────────────── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5">
                <h3 className="text-sm font-semibold text-gray-700 mb-4">
                   Previsto × Realizado
@@ -491,7 +681,6 @@ export default function DashboardPage() {
                   </div>
                ) : (
                   <div className="space-y-3">
-                     {/* Receitas */}
                      <div>
                         <div className="flex justify-between text-xs text-gray-500 mb-1.5">
                            <span>Receitas</span>
@@ -512,22 +701,11 @@ export default function DashboardPage() {
                            <div
                               className="bg-green-500 h-2 rounded-full transition-all duration-700"
                               style={{
-                                 width: `${
-                                    dados?.resumo.receitas.provisionado
-                                       ? Math.min(
-                                            (dados.resumo.receitas.confirmado /
-                                               dados.resumo.receitas
-                                                  .provisionado) *
-                                               100,
-                                            100,
-                                         )
-                                       : 0
-                                 }%`,
+                                 width: `${dados?.resumo.receitas.provisionado ? Math.min((dados.resumo.receitas.confirmado / dados.resumo.receitas.provisionado) * 100, 100) : 0}%`,
                               }}
                            />
                         </div>
                      </div>
-                     {/* Despesas */}
                      <div>
                         <div className="flex justify-between text-xs text-gray-500 mb-1.5">
                            <span>Despesas</span>
@@ -548,22 +726,11 @@ export default function DashboardPage() {
                            <div
                               className="bg-red-500 h-2 rounded-full transition-all duration-700"
                               style={{
-                                 width: `${
-                                    dados?.resumo.despesas.provisionado
-                                       ? Math.min(
-                                            (dados.resumo.despesas.pago /
-                                               dados.resumo.despesas
-                                                  .provisionado) *
-                                               100,
-                                            100,
-                                         )
-                                       : 0
-                                 }%`,
+                                 width: `${dados?.resumo.despesas.provisionado ? Math.min((dados.resumo.despesas.pago / dados.resumo.despesas.provisionado) * 100, 100) : 0}%`,
                               }}
                            />
                         </div>
                      </div>
-                     {/* Mini resumo */}
                      <div className="grid grid-cols-2 gap-2 pt-1">
                         <div className="bg-gray-50 rounded-lg p-2.5">
                            <p className="text-[10px] text-gray-400 mb-0.5">
@@ -591,7 +758,7 @@ export default function DashboardPage() {
                )}
             </div>
 
-            {/* ── Atenção + Cartões — lado a lado (mobile e desktop) ───────── */}
+            {/* ── Atenção + Cartões ────────────────────────────────────────── */}
             <div className="grid grid-cols-2 gap-2 md:gap-4">
                {/* Alertas */}
                <Link
@@ -752,14 +919,7 @@ export default function DashboardPage() {
                                        </span>
                                     </div>
                                     <span
-                                       className={`text-[10px] md:text-[11px] font-semibold shrink-0 ml-1 ${
-                                          (cartao.percentual_usado ?? 0) >= 90
-                                             ? "text-red-600"
-                                             : (cartao.percentual_usado ?? 0) >=
-                                                 70
-                                               ? "text-amber-600"
-                                               : "text-gray-600"
-                                       }`}
+                                       className={`text-[10px] md:text-[11px] font-semibold shrink-0 ml-1 ${(cartao.percentual_usado ?? 0) >= 90 ? "text-red-600" : (cartao.percentual_usado ?? 0) >= 70 ? "text-amber-600" : "text-gray-600"}`}
                                     >
                                        {cartao.percentual_usado ?? 0}%
                                     </span>
@@ -781,7 +941,7 @@ export default function DashboardPage() {
                </Link>
             </div>
 
-            {/* ── Evolução Mensal (full width, compacto no mobile) ─────────── */}
+            {/* ── Evolução Mensal ──────────────────────────────────────────── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5">
                <h3 className="text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-4">
                   Evolução dos últimos 6 meses
@@ -842,71 +1002,14 @@ export default function DashboardPage() {
 
             {/* ── Maiores Gastos + Fluxo de Caixa ─────────────────────────── */}
             <div className="grid grid-cols-2 gap-2 md:gap-4">
-               {/* Maiores gastos por categoria */}
-               <Link
-                  href="/dashboard/despesas"
-                  className="group block bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5 hover:shadow-md transition-all"
-               >
-                  <div className="flex items-center justify-between mb-3 md:mb-4">
-                     <h3 className="text-xs md:text-sm font-semibold text-gray-700">
-                        Maiores gastos
-                     </h3>
-                     <span className="text-gray-400 group-hover:text-gray-600 transition-colors hidden md:block">
-                        <IconCategoria />
-                     </span>
-                  </div>
-                  {loading ? (
-                     <div className="space-y-2">
-                        {[1, 2, 3, 4].map((i) => (
-                           <Skeleton key={i} className="h-8" />
-                        ))}
-                     </div>
-                  ) : dados?.gastos_por_categoria.length === 0 ? (
-                     <p className="text-xs text-gray-400 text-center py-4">
-                        Nenhuma despesa paga neste mês
-                     </p>
-                  ) : (
-                     <div className="space-y-2.5">
-                        {dados?.gastos_por_categoria.map((cat, i) => (
-                           <div key={cat.categoria}>
-                              <div className="flex items-center justify-between mb-1">
-                                 <div className="flex items-center gap-2 min-w-0">
-                                    <span
-                                       className="w-2 h-2 rounded-full shrink-0"
-                                       style={{
-                                          backgroundColor:
-                                             cat.cor ||
-                                             CATEGORY_COLORS[
-                                                i % CATEGORY_COLORS.length
-                                             ],
-                                       }}
-                                    />
-                                    <span className="text-xs text-gray-600 truncate">
-                                       {cat.categoria}
-                                    </span>
-                                 </div>
-                                 <span className="text-xs font-semibold text-gray-700 ml-2 shrink-0">
-                                    {fmtValorCompacto(cat.total)}
-                                 </span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                 <div
-                                    className="h-1.5 rounded-full transition-all duration-700"
-                                    style={{
-                                       width: `${Math.round((cat.total / categoriaMax) * 100)}%`,
-                                       backgroundColor:
-                                          cat.cor ||
-                                          CATEGORY_COLORS[
-                                             i % CATEGORY_COLORS.length
-                                          ],
-                                    }}
-                                 />
-                              </div>
-                           </div>
-                        ))}
-                     </div>
-                  )}
-               </Link>
+               {/* Card interativo de maiores gastos */}
+               <GastosCard
+                  dados={dados}
+                  loading={loading}
+                  mes={mes}
+                  mesaId={mesaId}
+                  categoriaMax={categoriaMax}
+               />
 
                {/* Fluxo de caixa */}
                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 md:p-5">
@@ -1043,27 +1146,25 @@ export default function DashboardPage() {
                            </div>
                         ))}
                      </div>
-
                      {/* Desktop */}
                      <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full">
                            <thead className="bg-gray-50 border-b border-gray-100">
                               <tr>
-                                 <th className="px-5 py-2.5 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    Descrição
-                                 </th>
-                                 <th className="px-5 py-2.5 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    Categoria
-                                 </th>
-                                 <th className="px-5 py-2.5 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    Mesa
-                                 </th>
-                                 <th className="px-5 py-2.5 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    Data
-                                 </th>
-                                 <th className="px-5 py-2.5 text-right text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    Valor
-                                 </th>
+                                 {[
+                                    "Descrição",
+                                    "Categoria",
+                                    "Mesa",
+                                    "Data",
+                                    "Valor",
+                                 ].map((h, i) => (
+                                    <th
+                                       key={h}
+                                       className={`px-5 py-2.5 text-[11px] font-medium text-gray-400 uppercase tracking-wide ${i === 4 ? "text-right" : "text-left"}`}
+                                    >
+                                       {h}
+                                    </th>
+                                 ))}
                               </tr>
                            </thead>
                            <tbody className="divide-y divide-gray-50">

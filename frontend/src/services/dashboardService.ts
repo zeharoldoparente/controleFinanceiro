@@ -49,7 +49,6 @@ export interface DashboardCartao {
    tipo: "credito" | "debito";
    cor: string | null;
    bandeira: string | null;
-   mesa: string;
    limite: number | null;
    gasto_mes: number;
    pendente_mes: number;
@@ -58,8 +57,21 @@ export interface DashboardCartao {
 
 export interface DashboardCategoria {
    categoria: string;
-   cor: string | null;
+   categoria_id: number | null;
    total: number;
+}
+
+/** Item individual dentro de uma categoria — usado no dropdown do dashboard */
+export interface DetalheCategoria {
+   id: number;
+   descricao: string;
+   valor: number;
+   data_vencimento: string;
+   parcela_atual: number;
+   parcelas: number;
+   forma_pagamento: string;
+   e_cartao: boolean;
+   cartao_cor: string | null;
 }
 
 export interface DashboardEvolucao {
@@ -106,15 +118,13 @@ export interface DashboardData {
    vazio?: boolean;
 }
 
+// ─── Default / Normalizer ─────────────────────────────────────────────────────
+
 const dashboardDataBase: DashboardData = {
    mes: "",
    mesas: [],
    resumo: {
-      receitas: {
-         confirmado: 0,
-         provisionado: 0,
-         qtd_confirmadas: 0,
-      },
+      receitas: { confirmado: 0, provisionado: 0, qtd_confirmadas: 0 },
       despesas: {
          pago: 0,
          provisionado: 0,
@@ -122,16 +132,9 @@ const dashboardDataBase: DashboardData = {
          qtd_pagas: 0,
          qtd_pendentes: 0,
       },
-      saldo: {
-         real: 0,
-         previsto: 0,
-      },
+      saldo: { real: 0, previsto: 0 },
    },
-   alertas: {
-      despesas_vencidas: [],
-      despesas_hoje: [],
-      cartoes_criticos: [],
-   },
+   alertas: { despesas_vencidas: [], despesas_hoje: [], cartoes_criticos: [] },
    cartoes: [],
    gastos_por_categoria: [],
    evolucao_mensal: [],
@@ -157,15 +160,9 @@ function normalizarDashboardData(
             ...dashboardDataBase.resumo.despesas,
             ...data?.resumo?.despesas,
          },
-         saldo: {
-            ...dashboardDataBase.resumo.saldo,
-            ...data?.resumo?.saldo,
-         },
+         saldo: { ...dashboardDataBase.resumo.saldo, ...data?.resumo?.saldo },
       },
-      alertas: {
-         ...dashboardDataBase.alertas,
-         ...data?.alertas,
-      },
+      alertas: { ...dashboardDataBase.alertas, ...data?.alertas },
    };
 }
 
@@ -174,17 +171,34 @@ function normalizarDashboardData(
 const dashboardService = {
    /**
     * Busca todos os dados do dashboard em uma única requisição.
-    * @param mes    Formato "YYYY-MM" (opcional, padrão = mês atual)
-    * @param mesaId ID da mesa (opcional — omitir para consolidado)
     */
    getDados: async (mes?: string, mesaId?: number): Promise<DashboardData> => {
       const params = new URLSearchParams();
       if (mes) params.append("mes", mes);
       if (mesaId) params.append("mesa_id", mesaId.toString());
-
       const query = params.toString();
       const response = await api.get(`/dashboard${query ? `?${query}` : ""}`);
       return normalizarDashboardData(response.data);
+   },
+
+   /**
+    * Busca os lançamentos individuais de uma categoria para o dropdown do dashboard.
+    * @param categoriaId  null = "Sem categoria"
+    */
+   getDetalhesCategoria: async (
+      categoriaId: number | null,
+      mes: string,
+      mesaId?: number,
+   ): Promise<DetalheCategoria[]> => {
+      const params = new URLSearchParams();
+      params.append("mes", mes);
+      if (categoriaId !== null)
+         params.append("categoria_id", String(categoriaId));
+      if (mesaId) params.append("mesa_id", String(mesaId));
+      const response = await api.get(
+         `/dashboard/detalhes-categoria?${params.toString()}`,
+      );
+      return response.data.itens ?? [];
    },
 };
 
