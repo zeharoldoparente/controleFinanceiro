@@ -15,8 +15,9 @@ app.use(
          const allowedOrigins = [
             "http://localhost:3000",
             "http://127.0.0.1:3000",
+            process.env.FRONTEND_URL,
             /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3000$/,
-         ];
+         ].filter(Boolean);
 
          const isAllowed = allowedOrigins.some((pattern) => {
             if (typeof pattern === "string") {
