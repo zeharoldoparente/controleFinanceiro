@@ -1,10 +1,39 @@
 const express = require("express");
 const NotificacaoController = require("../controllers/notificacaoController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const AlertasController = require("../controllers/alertasController");
 
 const router = express.Router();
 
 router.use(authMiddleware);
+
+/**
+ * @swagger
+ * /api/notificacoes/verificar-alertas:
+ *   post:
+ *     summary: Verificar e gerar alertas financeiros automáticos
+ *     description: >
+ *       Verifica despesas vencidas, vencendo em breve, faturas próximas,
+ *       limites ultrapassados, receitas pendentes e gastos altos por categoria.
+ *       Cria notificações no sininho sem duplicatas. Chamado ao entrar no dashboard.
+ *     tags: [Notificações]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Alertas verificados
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 nao_lidas:
+ *                   type: integer
+ *                   description: Total de notificações não lidas após verificação
+ */
+router.post("/verificar-alertas", AlertasController.verificar);
 
 /**
  * @swagger
