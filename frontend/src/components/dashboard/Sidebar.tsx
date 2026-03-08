@@ -222,7 +222,7 @@ export default function Sidebar({
             <div className="flex items-center justify-center p-4 border-b border-white/10">
                {shouldBeExpanded ? (
                   <Image
-                     src="/logo_nome_branco2.png"
+                     src="/logo_nome_branco2.PNG"
                      alt="ControlFin Logo"
                      width={140}
                      height={40}
