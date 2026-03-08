@@ -7,34 +7,52 @@ const swaggerSpec = require("./swagger");
 
 const app = express();
 
-app.use(
-   cors({
-      origin: function (origin, callback) {
-         if (!origin) return callback(null, true);
+function normalizeOrigin(origin) {
+   return typeof origin === "string" ? origin.replace(/\/+$/, "") : origin;
+}
 
-         const allowedOrigins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            process.env.FRONTEND_URL,
-            /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3000$/,
-         ].filter(Boolean);
+function parseOriginsFromEnv() {
+   return [process.env.FRONTEND_URL, process.env.FRONTEND_URLS]
+      .filter(Boolean)
+      .flatMap((value) => value.split(","))
+      .map((value) => normalizeOrigin(value.trim()))
+      .filter(Boolean);
+}
 
-         const isAllowed = allowedOrigins.some((pattern) => {
-            if (typeof pattern === "string") {
-               return pattern === origin;
-            }
-            return pattern.test(origin);
-         });
-
-         if (isAllowed) {
-            callback(null, true);
-         } else {
-            callback(new Error("Not allowed by CORS"));
-         }
-      },
-      credentials: true,
-   }),
+const allowedOriginStrings = Array.from(
+   new Set([
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      ...parseOriginsFromEnv(),
+   ]),
 );
+
+const allowedOriginPatterns = [
+   /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3000$/,
+   /^https:\/\/(?:[a-z0-9-]+\.)?vercel\.app$/i,
+];
+
+const corsOptions = {
+   origin(origin, callback) {
+      if (!origin) return callback(null, true);
+
+      const normalizedOrigin = normalizeOrigin(origin);
+      const isAllowedByString = allowedOriginStrings.includes(normalizedOrigin);
+      const isAllowedByPattern = allowedOriginPatterns.some((pattern) =>
+         pattern.test(normalizedOrigin),
+      );
+
+      if (isAllowedByString || isAllowedByPattern) {
+         return callback(null, true);
+      }
+
+      console.warn(`[CORS] blocked origin: ${origin}`);
+      return callback(new Error("Not allowed by CORS"));
+   },
+   credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -44,7 +62,7 @@ app.use(
    swaggerUi.serve,
    swaggerUi.setup(swaggerSpec, {
       customCss: ".swagger-ui .topbar { display: none }",
-      customSiteTitle: "API Controle Financeiro - Documentação",
+      customSiteTitle: "API Controle Financeiro - Documentacao",
       swaggerOptions: {
          docExpansion: "none",
          defaultModelsExpandDepth: -1,
@@ -53,10 +71,9 @@ app.use(
 );
 
 db.getConnection()
-   .then(() => console.log("✅ Conectado ao MySQL!"))
-   .catch((err) => console.error("❌ Erro ao conectar:", err));
+   .then(() => console.log("Conectado ao MySQL!"))
+   .catch((err) => console.error("Erro ao conectar:", err));
 
-// ── Rotas ──────────────────────────────────────────────────────────────────
 const authRoutes = require("./src/routes/authRoutes");
 const categoriaRoutes = require("./src/routes/categoriaRoutes");
 const formaPagamentoRoutes = require("./src/routes/formaPagamentoRoutes");
@@ -95,5 +112,5 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-   console.log(`🚀 Servidor rodando na porta ${PORT}`);
+   console.log(`Servidor rodando na porta ${PORT}`);
 });

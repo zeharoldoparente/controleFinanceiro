@@ -210,20 +210,76 @@ function baseTemplate({ headerTitle, headerSubtitle, body }) {
 
 class EmailService {
    constructor() {
+      const port = parseInt(process.env.EMAIL_PORT || "587", 10);
+      const secure = port === 465;
+
       this.transporter = nodemailer.createTransport({
          host: process.env.EMAIL_HOST,
-         port: parseInt(process.env.EMAIL_PORT || "587"),
-         secure: false,
+         port,
+         secure,
          auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASSWORD,
          },
+         connectionTimeout: 10000,
+         greetingTimeout: 10000,
+         socketTimeout: 20000,
+         requireTLS: !secure,
       });
+
+      this.transporter
+         .verify()
+         .then(() => {
+            console.log("[EMAIL] SMTP conectado com sucesso");
+         })
+         .catch((error) => {
+            console.error("[EMAIL] Falha ao conectar SMTP:", {
+               message: error.message,
+               code: error.code,
+               command: error.command,
+            });
+         });
    }
 
+   getFrontendUrl() {
+      return process.env.FRONTEND_URL || "http://localhost:3000";
+   }
+
+   getAppUrl() {
+      return process.env.APP_URL || "http://localhost:3001";
+   }
+
+   getBackendUrl() {
+      return process.env.BACKEND_URL || "http://localhost:3001";
+   }
+
+   async sendMail(mailOptions) {
+      try {
+         const info = await this.transporter.sendMail(mailOptions);
+         console.log("[EMAIL] Enviado:", {
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected,
+         });
+         return info;
+      } catch (error) {
+         console.error("[EMAIL] Erro ao enviar:", {
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            message: error.message,
+            code: error.code,
+            responseCode: error.responseCode,
+            command: error.command,
+            response: error.response,
+         });
+         throw error;
+      }
+   }
    // ── 1. Verificação de Email ──────────────────────────────
    async enviarEmailVerificacao(para, nome, token) {
-      const link = `${process.env.APP_URL}/api/auth/verificar-email/${token}`;
+      const link = `${this.getAppUrl()}/api/auth/verificar-email/${token}`;
       const primeiroNome = nome.split(" ")[0];
 
       const html = baseTemplate({
@@ -248,7 +304,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: para,
          subject: "✉️ Confirme seu email — ControlFin",
@@ -258,7 +314,7 @@ class EmailService {
 
    // ── 2. Convite para usuário SEM cadastro ─────────────────
    async enviarEmailConviteNovo(para, nomeQuemConvidou, nomeMesa, token) {
-      const link = `${process.env.FRONTEND_URL}/cadastro?convite=${token}`;
+      const link = `${this.getFrontendUrl()}/cadastro?convite=${token}`;
 
       const html = baseTemplate({
          headerTitle: "Você foi convidado!",
@@ -286,7 +342,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: para,
          subject: `🤝 ${nomeQuemConvidou} te convidou para a mesa "${nomeMesa}" — ControlFin`,
@@ -302,7 +358,7 @@ class EmailService {
       nomeConvidado,
       token,
    ) {
-      const link = `${process.env.FRONTEND_URL}/dashboard/mesas`;
+      const link = `${this.getFrontendUrl()}/dashboard/mesas`;
       const primeiroNome = (nomeConvidado || "").split(" ")[0] || "você";
 
       const html = baseTemplate({
@@ -333,7 +389,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: para,
          subject: `🤝 ${nomeQuemConvidou} te convidou para a mesa "${nomeMesa}" — ControlFin`,
@@ -343,7 +399,7 @@ class EmailService {
 
    // ── 4. Recuperação de Senha ──────────────────────────────
    async enviarEmailRecuperacaoSenha(para, nome, token) {
-      const link = `${process.env.FRONTEND_URL}/resetar-senha/${token}`;
+      const link = `${this.getFrontendUrl()}/resetar-senha/${token}`;
       const primeiroNome = nome.split(" ")[0];
 
       const html = baseTemplate({
@@ -368,7 +424,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: para,
          subject: "🔐 Redefinição de senha — ControlFin",
@@ -378,7 +434,7 @@ class EmailService {
 
    // ── Email: Solicitação de troca de senha (feita pelo próprio usuário logado) ──
    async enviarEmailAlteracaoSenha(para, nome, token) {
-      const link = `${process.env.FRONTEND_URL}/resetar-senha/${token}`;
+      const link = `${this.getFrontendUrl()}/resetar-senha/${token}`;
       const primeiroNome = nome.split(" ")[0];
 
       const html = baseTemplate({
@@ -403,7 +459,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: para,
          subject: "🔐 Confirmação de alteração de senha — ControlFin",
@@ -457,7 +513,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: "sac.controlfin@gmail.com",
          replyTo: emailUsuario,
@@ -498,7 +554,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: para,
          subject: "✅ Sua mensagem foi recebida — ControlFin",
@@ -508,9 +564,9 @@ class EmailService {
 
    // ── Email: Confirmação de troca de email (enviado para o NOVO email) ──
    async enviarEmailConfirmacaoTrocaEmail(novoEmail, nome, token, emailAtual) {
-      const link = `${process.env.FRONTEND_URL || "http://localhost:3000"}/api/conta/confirmar-troca-email?token=${token}`;
+      const link = `${this.getFrontendUrl()}/api/conta/confirmar-troca-email?token=${token}`;
       // Usar a URL da API do backend, não do frontend
-      const linkBackend = `${process.env.BACKEND_URL || "http://localhost:3001"}/api/conta/confirmar-troca-email?token=${token}`;
+      const linkBackend = `${this.getBackendUrl()}/api/conta/confirmar-troca-email?token=${token}`;
       const primeiroNome = nome.split(" ")[0];
 
       const html = baseTemplate({
@@ -541,7 +597,7 @@ class EmailService {
          `,
       });
 
-      await this.transporter.sendMail({
+      await this.sendMail({
          from: process.env.EMAIL_FROM,
          to: novoEmail,
          subject: "📧 Confirme seu novo email — ControlFin",
@@ -551,3 +607,4 @@ class EmailService {
 }
 
 module.exports = new EmailService();
+
