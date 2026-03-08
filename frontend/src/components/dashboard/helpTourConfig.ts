@@ -13,7 +13,7 @@ export const FULL_TOUR_STEPS: HelpStep[] = [
       id: "welcome",
       title: "Bem-vindo ao ControlFin",
       description:
-         "Vamos fazer um tour rapido com as primeiras tarefas. Primeiro passo: criar sua mesa para separar as financas.",
+         "Vamos fazer um tour rapido com as primeiras tarefas. Primeiro passo: criar sua mesa de controle financeiro para separar as financas.",
       route: "*",
       placement: "center",
       nextLabel: "Iniciar tutorial",
@@ -22,7 +22,7 @@ export const FULL_TOUR_STEPS: HelpStep[] = [
       id: "mesas-header",
       title: "Tela de Mesas",
       description:
-         "Aqui voce cria ambientes separados, como Pessoal, Familia ou Negocio.",
+         "Aqui é o seu primeiro passo, crie ambientes (mesas) separados, como Pessoal, Familia ou Negocio.",
       route: "/dashboard/mesas",
       selector: '[data-help-id="mesas-header"]',
       placement: "bottom",
@@ -49,7 +49,7 @@ export const FULL_TOUR_STEPS: HelpStep[] = [
       id: "receitas-create",
       title: "Nova receita",
       description:
-         "Use esse botao para registrar receitas simples, recorrentes ou parceladas.",
+         "Use esse botão para registrar receitas simples, recorrentes ou parceladas.",
       route: "/dashboard/receitas",
       selector: '[data-help-id="receitas-new-button"]',
       placement: "bottom",
@@ -58,7 +58,7 @@ export const FULL_TOUR_STEPS: HelpStep[] = [
       id: "despesas-header",
       title: "Controle de Despesas",
       description:
-         "Nesta tela voce acompanha contas, vencimentos, pagamentos e comprovantes.",
+         "Nesta tela você acompanha contas, vencimentos, pagamentos e comprovantes.",
       route: "/dashboard/despesas",
       selector: '[data-help-id="despesas-header"]',
       placement: "bottom",
@@ -76,7 +76,7 @@ export const FULL_TOUR_STEPS: HelpStep[] = [
       id: "dashboard-header",
       title: "Visao geral",
       description:
-         "No Dashboard voce enxerga resumo, alertas e evolucao financeira da mesa selecionada.",
+         "No Dashboard voce enxerga resumo, alertas e evolução financeira da mesa selecionada.",
       route: "/dashboard",
       selector: '[data-help-id="dashboard-header"]',
       placement: "bottom",
@@ -85,7 +85,7 @@ export const FULL_TOUR_STEPS: HelpStep[] = [
       id: "finish",
       title: "Tutorial finalizado",
       description:
-         "Pronto. Voce pode abrir as dicas novamente pelo botao ? no canto da tela.",
+         "Pronto. Voce pode abrir as dicas novamente pelo botão ? no canto da tela.",
       route: "/dashboard",
       placement: "center",
       nextLabel: "Concluir",
@@ -98,7 +98,7 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
          id: "dashboard-intro",
          title: "Ajuda do Dashboard",
          description:
-            "Resumo financeiro da mesa ativa com alertas, graficos e atalho para receitas e despesas.",
+            "Resumo financeiro da mesa ativa com alertas, gráficos e atalho para receitas e despesas.",
          route: "/dashboard",
          placement: "center",
       },
@@ -106,7 +106,7 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
          id: "dashboard-header",
          title: "Resumo da tela",
          description:
-            "Aqui voce acompanha o consolidado do mes e acessa as principais areas.",
+            "Aqui você acompanha o consolidado do mês e acessa as principais áreas.",
          route: "/dashboard",
          selector: '[data-help-id="dashboard-header"]',
          placement: "bottom",
@@ -133,7 +133,7 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
       {
          id: "mesas-new",
          title: "Nova Mesa",
-         description: "Use esse botao para criar uma nova mesa.",
+         description: "Use esse botão para criar uma nova mesa.",
          route: "/dashboard/mesas",
          selector: '[data-help-id="mesas-new-button"]',
          placement: "bottom",
@@ -145,14 +145,14 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
          id: "receitas-intro",
          title: "Ajuda da tela de Receitas",
          description:
-            "Registre entradas, confirme recebimentos e acompanhe previsao de caixa.",
+            "Registre entradas, confirme recebimentos e acompanhe previsão de caixa.",
          route: "/dashboard/receitas",
          placement: "center",
       },
       {
          id: "receitas-new",
          title: "Nova Receita",
-         description: "Clique para abrir o formulario de nova receita.",
+         description: "Clique para abrir o formulário de nova receita.",
          route: "/dashboard/receitas",
          selector: '[data-help-id="receitas-new-button"]',
          placement: "bottom",
@@ -164,7 +164,7 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
          id: "despesas-intro",
          title: "Ajuda da tela de Despesas",
          description:
-            "Controle contas a vencer, pagas e vencidas com historico de comprovantes.",
+            "Controle contas a vencer, pagas e vencidas com histórico de comprovantes.",
          route: "/dashboard/despesas",
          placement: "center",
       },
@@ -181,16 +181,16 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
    "/dashboard/cartoes": [
       {
          id: "cartoes-intro",
-         title: "Ajuda da tela de Cartoes",
+         title: "Ajuda da tela de Cartões",
          description:
-            "Cadastre cartoes, acompanhe limite e visualize faturas por mes.",
+            "Cadastre cartões, acompanhe limite e visualize faturas por mês.",
          route: "/dashboard/cartoes",
          placement: "center",
       },
       {
          id: "cartoes-new",
-         title: "Novo Cartao",
-         description: "Use esse botao para cadastrar um cartao.",
+         title: "Novo Cartão",
+         description: "Use esse botão para cadastrar um cartão.",
          route: "/dashboard/cartoes",
          selector: '[data-help-id="cartoes-new-button"]',
          placement: "bottom",
@@ -227,9 +227,9 @@ const SCREEN_HELP_STEPS: Record<string, HelpStep[]> = {
       },
       {
          id: "conta-header",
-         title: "Configuracoes pessoais",
+         title: "Configurações pessoais",
          description:
-            "Use esta area para ajustar dados da conta e preferencias do sistema.",
+            "Use esta área para ajustar dados da conta e preferências do sistema.",
          route: "/dashboard/conta",
          selector: '[data-help-id="conta-header"]',
          placement: "bottom",
