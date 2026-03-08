@@ -15,8 +15,8 @@ class Mesa {
          const mesaId = result.insertId;
 
          await connection.query(
-            "INSERT INTO mesa_usuarios (mesa_id, user_id, papel) VALUES (?, ?, ?)",
-            [mesaId, criadorId, "criador"],
+            "INSERT INTO mesa_usuarios (mesa_id, user_id) VALUES (?, ?)",
+            [mesaId, criadorId],
          );
 
          await connection.commit();

@@ -38,6 +38,25 @@ class MesaController {
 
          const mesaId = await Mesa.create(nome, userId);
 
+         try {
+            await db.query(
+               "UPDATE mesa_usuarios SET papel = ? WHERE mesa_id = ? AND user_id = ?",
+               ["criador", mesaId, userId],
+            );
+         } catch (papelError) {
+            if (
+               papelError?.code !== "ER_BAD_FIELD_ERROR" &&
+               papelError?.code !== "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD" &&
+               papelError?.code !== "ER_NO_SUCH_TABLE"
+            ) {
+               throw papelError;
+            }
+
+            console.warn(
+               "Não foi possível marcar papel de criador (modo compatibilidade):",
+               papelError.sqlMessage || papelError.message,
+            );
+         }
 
          res.status(201).json({
             message: "Mesa criada com sucesso!",

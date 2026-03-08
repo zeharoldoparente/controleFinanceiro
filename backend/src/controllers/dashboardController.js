@@ -418,6 +418,52 @@ class DashboardController {
          });
       } catch (error) {
          console.error("Erro no dashboard:", error);
+
+         if (
+            error &&
+            (error.code === "ER_BAD_FIELD_ERROR" ||
+               error.code === "ER_NO_SUCH_TABLE")
+         ) {
+            console.warn(
+               "Dashboard em modo compatibilidade por schema legado:",
+               error.sqlMessage || error.message,
+            );
+
+            let mesas = [];
+            try {
+               mesas = await Mesa.findByUserId(req.userId);
+            } catch (_) {
+               mesas = [];
+            }
+
+            return res.json({
+               mes: mesFiltro,
+               mesas: mesas.map((m) => ({ id: m.id, nome: m.nome })),
+               resumo: {
+                  receitas: { confirmado: 0, provisionado: 0, qtd_confirmadas: 0 },
+                  despesas: {
+                     pago: 0,
+                     provisionado: 0,
+                     pendente: 0,
+                     qtd_pagas: 0,
+                     qtd_pendentes: 0,
+                  },
+                  saldo: { real: 0, previsto: 0 },
+               },
+               alertas: {
+                  despesas_vencidas: [],
+                  despesas_hoje: [],
+                  cartoes_criticos: [],
+               },
+               cartoes: [],
+               gastos_por_categoria: [],
+               evolucao_mensal: [],
+               fluxo_caixa: [],
+               ultimas_movimentacoes: [],
+               compatibilidade: true,
+            });
+         }
+
          res.status(500).json({ error: "Erro ao carregar dados do dashboard" });
       }
    }
