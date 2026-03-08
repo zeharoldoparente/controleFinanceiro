@@ -166,7 +166,7 @@ body {
 function baseTemplate({ headerTitle, headerSubtitle, body }) {
    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
    const logoUrl = `${frontendUrl}/logo_nome_branco2.PNG`;
-   const nasamUrl = `${frontendUrl}/NASAMDev.svg`;
+   const nasamUrl = `${frontendUrl}/NASAMDev.png`;
 
    return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -277,7 +277,6 @@ class EmailService {
          throw error;
       }
    }
-
 
    // ── 1. Verificação de Email ──────────────────────────────
    async enviarEmailVerificacao(para, nome, token) {

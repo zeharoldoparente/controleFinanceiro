@@ -154,7 +154,7 @@ export default function LoginPage() {
                <p className="text-[10px] text-gray-500 flex items-center justify-center gap-2">
                   Desenvolvido e mantido por{" "}
                   <Image
-                     src="/NASAMDev.svg"
+                     src="/NASAMDev.png"
                      alt="NasamDev Logo"
                      width={100}
                      height={100}
