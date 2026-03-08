@@ -12,10 +12,12 @@ function hojeStr() {
 
 class DashboardController {
    static async getDados(req, res) {
+      const { mes } = req.query || {};
+      const mesFiltro = mes || mesAtual();
+
       try {
-         const { mesa_id, mes } = req.query;
+         const { mesa_id } = req.query;
          const userId = req.userId;
-         const mesFiltro = mes || mesAtual();
          const hoje = hojeStr();
          const primeiroDia = `${mesFiltro}-01`;
 
@@ -154,10 +156,25 @@ class DashboardController {
          );
 
          // ── 5. Cartões ───────────────────────────────────────────────────────
+         const [cartaoColumns] = await db.query(
+            `SELECT COLUMN_NAME
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'cartoes'
+               AND COLUMN_NAME IN ('tipo', 'limite_pessoal', 'cor')`,
+         );
+         const cartaoColumnSet = new Set(cartaoColumns.map((c) => c.COLUMN_NAME));
+         const hasCartaoTipo = cartaoColumnSet.has("tipo");
+         const hasCartaoLimitePessoal = cartaoColumnSet.has("limite_pessoal");
+         const hasCartaoCor = cartaoColumnSet.has("cor");
          const [cartoes] = await db.query(
             `SELECT
-               ca.id, ca.nome, ca.tipo,
-               ca.limite_real, ca.limite_pessoal, ca.cor,
+               ca.id,
+               ca.nome,
+               ${hasCartaoTipo ? "ca.tipo" : "'credito' AS tipo"},
+               ca.limite_real,
+               ${hasCartaoLimitePessoal ? "ca.limite_pessoal" : "NULL AS limite_pessoal"},
+               ${hasCartaoCor ? "ca.cor" : "NULL AS cor"},
                b.nome AS bandeira_nome,
                COALESCE((
                   SELECT SUM(COALESCE(d.valor_real, d.valor_provisionado))
@@ -176,7 +193,7 @@ class DashboardController {
              FROM cartoes ca
              LEFT JOIN bandeiras b ON ca.bandeira_id = b.id
              WHERE ca.user_id = ? AND ca.ativa = TRUE
-             ORDER BY ca.limite_pessoal DESC`,
+             ORDER BY ${hasCartaoLimitePessoal ? "ca.limite_pessoal" : "ca.limite_real"} DESC`,
             [mesFiltro, mesFiltro, userId],
          );
 
