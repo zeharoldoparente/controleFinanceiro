@@ -435,7 +435,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
 
                                           {/* Botões de convite */}
                                           {notif.tipo === "convite_mesa" &&
-                                             notif.dados_extras?.token &&
+                                             typeof notif.dados_extras?.token === "string" &&
                                              !notif.lida && (
                                                 <div className="flex gap-2 mt-2">
                                                    <button

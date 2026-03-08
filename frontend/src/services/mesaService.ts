@@ -4,6 +4,7 @@ export interface Mesa {
    id: number;
    nome: string;
    descricao?: string;
+   criador_id?: number;
    created_at?: string;
 }
 
