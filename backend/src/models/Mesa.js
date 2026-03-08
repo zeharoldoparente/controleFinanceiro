@@ -15,8 +15,8 @@ class Mesa {
          const mesaId = result.insertId;
 
          await connection.query(
-            " INSERT INTO mesa_usuarios (mesa_id, user_id) VALUES (?, ?)",
-            [mesaId, criadorId],
+            "INSERT INTO mesa_usuarios (mesa_id, user_id, papel) VALUES (?, ?, ?)",
+            [mesaId, criadorId, "criador"],
          );
 
          await connection.commit();
@@ -70,7 +70,7 @@ class Mesa {
          throw new Error("Apenas o criador pode editar a mesa");
       }
 
-      await db.query("UPDATE mesas SET nome = ? WHERE id = ?", [mesa, mesaId]);
+      await db.query("UPDATE mesas SET nome = ? WHERE id = ?", [nome, mesaId]);
    }
 
    static async delete(mesaId, userId) {

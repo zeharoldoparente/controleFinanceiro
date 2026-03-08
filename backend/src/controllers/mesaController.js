@@ -38,10 +38,6 @@ class MesaController {
 
          const mesaId = await Mesa.create(nome, userId);
 
-         await db.query(
-            'UPDATE mesa_usuarios SET papel = "criador" WHERE mesa_id = ? AND user_id = ?',
-            [mesaId, userId],
-         );
 
          res.status(201).json({
             message: "Mesa criada com sucesso!",
