@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
    const isLastStep = stepIndex === steps.length - 1;
    const stepMatchesPath = Boolean(
       currentStep &&
-         (currentStep.route === "*" || currentStep.route === pathname),
+      (currentStep.route === "*" || currentStep.route === pathname),
    );
 
    const persistSession = useCallback((session: TutorialSession | null) => {
@@ -276,8 +276,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             targetRect.top > estimatedHeight + offset);
 
       const top = shouldPlaceAbove
-         ? clamp(targetRect.top - estimatedHeight - offset, 12, viewport.height - 20)
-         : clamp(targetRect.bottom + offset, 12, viewport.height - estimatedHeight - 12);
+         ? clamp(
+              targetRect.top - estimatedHeight - offset,
+              12,
+              viewport.height - 20,
+           )
+         : clamp(
+              targetRect.bottom + offset,
+              12,
+              viewport.height - estimatedHeight - 12,
+           );
 
       const left = clamp(
          targetRect.left + targetRect.width / 2 - width / 2,
@@ -290,7 +298,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
          left,
          width,
       };
-   }, [currentStep, showCenteredCard, targetRect, viewport.height, viewport.width]);
+   }, [
+      currentStep,
+      showCenteredCard,
+      targetRect,
+      viewport.height,
+      viewport.width,
+   ]);
 
    const primaryLabel =
       currentStep?.nextLabel || (isLastStep ? "Concluir" : "Proxima");
@@ -311,7 +325,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             >
                <Header onMenuToggle={toggleSidebar} sidebarOpen={sidebarOpen} />
 
-               <main className="pt-16 px-4 md:px-6 pb-24 sm:pb-10">{children}</main>
+               <main className="pt-16 px-4 md:px-6 pb-24 sm:pb-10">
+                  {children}
+               </main>
             </div>
 
             {!tutorialOpen && (
@@ -392,13 +408,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                            <p className="mt-2 text-sm leading-relaxed text-gray-600">
                               {currentStep.description}
                            </p>
-
-                           {currentStep.selector && !targetRect && stepMatchesPath && (
-                              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 border border-amber-100">
-                                 Dica: nao localizamos este elemento na tela atual,
-                                 mas voce pode seguir normalmente.
-                              </p>
-                           )}
                         </>
                      )}
 
@@ -454,6 +463,3 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </MesaProvider>
    );
 }
-
-
-
