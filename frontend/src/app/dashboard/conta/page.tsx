@@ -27,6 +27,21 @@ import contaService, {
    PerfilUsuario,
    TipoSuporte,
 } from "@/services/contaService";
+import tipoPagamentoService, {
+   TipoPagamento,
+} from "@/services/tipoPagamentoService";
+type ApiErrorShape = {
+   response?: {
+      data?: {
+         error?: string;
+      };
+   };
+};
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+   const message = (error as ApiErrorShape)?.response?.data?.error;
+   return typeof message === "string" && message.trim() ? message : fallback;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function Avatar({
@@ -69,41 +84,107 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
    const previewRef = useRef<HTMLCanvasElement>(null);
    const imgRef = useRef<HTMLImageElement | null>(null);
 
-   const SIZE = 300; // tamanho do canvas de edição
-   const PREVIEW = 96; // tamanho do preview circular
+   const SIZE = 300;
+   const PREVIEW = 96;
+   const MAX_ZOOM = 5;
 
+   const [minZoom, setMinZoom] = useState(0.1);
    const [zoom, setZoom] = useState(1);
    const [offset, setOffset] = useState({ x: 0, y: 0 });
    const [dragging, setDragging] = useState(false);
-   const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
-   const stateRef = useRef({ zoom: 1, offset: { x: 0, y: 0 } });
    const [salvando, setSalvando] = useState(false);
 
-   // Mantém stateRef sincronizado para usar dentro dos event listeners
+   const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
+   const stateRef = useRef({ zoom: 1, offset: { x: 0, y: 0 } });
+
    useEffect(() => {
       stateRef.current = { zoom, offset };
    }, [zoom, offset]);
 
-   // Carrega a imagem e centraliza
+   const clampOffset = useCallback(
+      (nextOffset: { x: number; y: number }, nextZoom: number) => {
+         const img = imgRef.current;
+         if (!img) return nextOffset;
+
+         const halfW = (img.width * nextZoom) / 2;
+         const halfH = (img.height * nextZoom) / 2;
+         const limitX = Math.max(0, halfW - SIZE / 2);
+         const limitY = Math.max(0, halfH - SIZE / 2);
+
+         return {
+            x: Math.min(limitX, Math.max(-limitX, nextOffset.x)),
+            y: Math.min(limitY, Math.max(-limitY, nextOffset.y)),
+         };
+      },
+      [],
+   );
+
+   const applyZoom = useCallback(
+      (nextZoom: number) => {
+         const clampedZoom = Math.min(MAX_ZOOM, Math.max(minZoom, nextZoom));
+         const clampedOffset = clampOffset(
+            stateRef.current.offset,
+            clampedZoom,
+         );
+         setZoom(clampedZoom);
+         setOffset(clampedOffset);
+      },
+      [clampOffset, minZoom],
+   );
+
    useEffect(() => {
       const img = new Image();
       img.onload = () => {
          imgRef.current = img;
-         // Zoom inicial para cobrir o círculo
-         const minZoom = Math.max(SIZE / img.width, SIZE / img.height);
-         setZoom(Math.max(1, minZoom));
+         const computedMinZoom = Math.max(SIZE / img.width, SIZE / img.height);
+         const nextMinZoom = Math.min(MAX_ZOOM, Math.max(0.1, computedMinZoom));
+         setMinZoom(nextMinZoom);
+         setZoom(nextMinZoom);
          setOffset({ x: 0, y: 0 });
       };
       img.src = imageSrc;
    }, [imageSrc]);
 
-   // Redraw do canvas principal
+   const drawPreview = (
+      img: HTMLImageElement,
+      z: number,
+      o: { x: number; y: number },
+   ) => {
+      const pc = previewRef.current;
+      if (!pc) return;
+      const ctx = pc.getContext("2d");
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, PREVIEW, PREVIEW);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      const scale = PREVIEW / SIZE;
+      const w = img.width * z * scale;
+      const h = img.height * z * scale;
+      const x = PREVIEW / 2 - w / 2 + o.x * scale;
+      const y = PREVIEW / 2 - h / 2 + o.y * scale;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(PREVIEW / 2, PREVIEW / 2, PREVIEW / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, x, y, w, h);
+      ctx.restore();
+   };
+
    const draw = useCallback(() => {
       const canvas = canvasRef.current;
       const img = imgRef.current;
       if (!canvas || !img) return;
-      const ctx = canvas.getContext("2d")!;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
       ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
 
       const { zoom: z, offset: o } = stateRef.current;
       const w = img.width * z;
@@ -111,14 +192,10 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
       const x = SIZE / 2 - w / 2 + o.x;
       const y = SIZE / 2 - h / 2 + o.y;
 
-      // Fundo escuro
       ctx.fillStyle = "#111";
       ctx.fillRect(0, 0, SIZE, SIZE);
-
-      // Imagem
       ctx.drawImage(img, x, y, w, h);
 
-      // Overlay escuro fora do círculo
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(0, 0, SIZE, SIZE);
@@ -128,97 +205,131 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
       ctx.fill();
       ctx.restore();
 
-      // Borda do círculo
       ctx.strokeStyle = "rgba(255,255,255,0.6)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 2, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Atualiza preview
       drawPreview(img, z, o);
    }, []);
 
-   const drawPreview = (
-      img: HTMLImageElement,
-      z: number,
-      o: { x: number; y: number },
-   ) => {
-      const pc = previewRef.current;
-      if (!pc) return;
-      const ctx = pc.getContext("2d")!;
-      ctx.clearRect(0, 0, PREVIEW, PREVIEW);
-      const scale = PREVIEW / SIZE;
-      const w = img.width * z * scale;
-      const h = img.height * z * scale;
-      const x = PREVIEW / 2 - w / 2 + o.x * scale;
-      const y = PREVIEW / 2 - h / 2 + o.y * scale;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(PREVIEW / 2, PREVIEW / 2, PREVIEW / 2, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(img, x, y, w, h);
-      ctx.restore();
-   };
-
-   // Re-draw ao mudar zoom/offset
    useEffect(() => {
       draw();
    }, [zoom, offset, draw]);
 
-   // Drag — mouse
    const onMouseDown = (e: MouseEvent<HTMLCanvasElement>) => {
       setDragging(true);
       dragStart.current = {
          x: e.clientX,
          y: e.clientY,
-         ox: offset.x,
-         oy: offset.y,
+         ox: stateRef.current.offset.x,
+         oy: stateRef.current.offset.y,
       };
    };
+
    const onMouseMove = (e: MouseEvent<HTMLCanvasElement>) => {
       if (!dragging) return;
       const dx = e.clientX - dragStart.current.x;
       const dy = e.clientY - dragStart.current.y;
-      setOffset({ x: dragStart.current.ox + dx, y: dragStart.current.oy + dy });
+      const nextOffset = clampOffset(
+         {
+            x: dragStart.current.ox + dx,
+            y: dragStart.current.oy + dy,
+         },
+         stateRef.current.zoom,
+      );
+      setOffset(nextOffset);
    };
+
    const onMouseUp = () => setDragging(false);
 
-   // Drag — touch
+   const getTouchDistance = (touches: React.TouchList) => {
+      const a = touches[0];
+      const b = touches[1];
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+   };
+
    const onTouchStart = (e: TouchEvent<HTMLCanvasElement>) => {
+      if (e.touches.length === 2) {
+         pinchStart.current = {
+            distance: getTouchDistance(e.touches),
+            zoom: stateRef.current.zoom,
+         };
+         setDragging(false);
+         return;
+      }
+
       const t = e.touches[0];
       setDragging(true);
       dragStart.current = {
          x: t.clientX,
          y: t.clientY,
-         ox: offset.x,
-         oy: offset.y,
+         ox: stateRef.current.offset.x,
+         oy: stateRef.current.offset.y,
       };
    };
+
    const onTouchMove = (e: TouchEvent<HTMLCanvasElement>) => {
-      if (!dragging) return;
+      if (e.touches.length === 2 && pinchStart.current) {
+         e.preventDefault();
+         const distance = getTouchDistance(e.touches);
+         const scale = distance / pinchStart.current.distance;
+         applyZoom(pinchStart.current.zoom * scale);
+         return;
+      }
+
+      if (!dragging || e.touches.length !== 1) return;
+      e.preventDefault();
       const t = e.touches[0];
-      setOffset({
-         x: dragStart.current.ox + t.clientX - dragStart.current.x,
-         y: dragStart.current.oy + t.clientY - dragStart.current.y,
-      });
+      const nextOffset = clampOffset(
+         {
+            x: dragStart.current.ox + t.clientX - dragStart.current.x,
+            y: dragStart.current.oy + t.clientY - dragStart.current.y,
+         },
+         stateRef.current.zoom,
+      );
+      setOffset(nextOffset);
    };
 
-   // Zoom via scroll
+   const onTouchEnd = (e: TouchEvent<HTMLCanvasElement>) => {
+      if (e.touches.length === 1) {
+         const t = e.touches[0];
+         setDragging(true);
+         dragStart.current = {
+            x: t.clientX,
+            y: t.clientY,
+            ox: stateRef.current.offset.x,
+            oy: stateRef.current.offset.y,
+         };
+      } else {
+         setDragging(false);
+      }
+
+      if (e.touches.length < 2) {
+         pinchStart.current = null;
+      }
+   };
+
    const onWheel = (e: WheelEvent<HTMLCanvasElement>) => {
       e.preventDefault();
-      setZoom((prev) => Math.min(5, Math.max(0.5, prev - e.deltaY * 0.001)));
+      applyZoom(stateRef.current.zoom - e.deltaY * 0.001);
    };
 
-   // Gerar imagem final recortada
    const confirmar = () => {
       const img = imgRef.current;
       if (!img) return;
+
       setSalvando(true);
       const out = document.createElement("canvas");
       out.width = 400;
       out.height = 400;
-      const ctx = out.getContext("2d")!;
+      const ctx = out.getContext("2d");
+      if (!ctx) return;
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
       const scale = 400 / SIZE;
       const z = stateRef.current.zoom;
       const o = stateRef.current.offset;
@@ -234,21 +345,20 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
       ctx.drawImage(img, x, y, w, h);
       ctx.restore();
 
-      const base64 = out.toDataURL("image/jpeg", 0.88);
+      const base64 = out.toDataURL("image/jpeg", 0.9);
       onConfirm(base64);
    };
 
    return (
       <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-            {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                <div>
                   <h3 className="text-sm font-bold text-gray-800">
                      Ajustar foto de perfil
                   </h3>
                   <p className="text-xs text-gray-400 mt-0.5">
-                     Arraste para reposicionar • Role para dar zoom
+                     Arraste para reposicionar • Use pinça ou slider para zoom
                   </p>
                </div>
                <button
@@ -271,7 +381,6 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
                </button>
             </div>
 
-            {/* Canvas de edição */}
             <div className="flex flex-col items-center gap-4 p-5">
                <canvas
                   ref={canvasRef}
@@ -285,11 +394,10 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
                   onMouseLeave={onMouseUp}
                   onTouchStart={onTouchStart}
                   onTouchMove={onTouchMove}
-                  onTouchEnd={onMouseUp}
+                  onTouchEnd={onTouchEnd}
                   onWheel={onWheel}
                />
 
-               {/* Slider de zoom */}
                <div className="w-full flex items-center gap-3">
                   <svg
                      className="w-4 h-4 text-gray-400 shrink-0"
@@ -306,11 +414,11 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
                   </svg>
                   <input
                      type="range"
-                     min="0.5"
-                     max="5"
+                     min={minZoom}
+                     max={MAX_ZOOM}
                      step="0.01"
                      value={zoom}
-                     onChange={(e) => setZoom(parseFloat(e.target.value))}
+                     onChange={(e) => applyZoom(parseFloat(e.target.value))}
                      className="flex-1 h-1.5 rounded-full accent-green-600 cursor-pointer"
                   />
                   <svg
@@ -328,7 +436,6 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
                   </svg>
                </div>
 
-               {/* Preview */}
                <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-400">Preview:</span>
                   <canvas
@@ -341,7 +448,6 @@ function AvatarCropper({ imageSrc, onConfirm, onCancel }: CropperProps) {
                </div>
             </div>
 
-            {/* Botões */}
             <div className="px-5 pb-5 flex gap-3">
                <button
                   onClick={onCancel}
@@ -374,12 +480,16 @@ function SectionCard({
    subtitle,
    icon,
    children,
+   isVisible = true,
 }: {
    title: string;
    subtitle?: string;
    icon: React.ReactNode;
    children: React.ReactNode;
+   isVisible?: boolean;
 }) {
+   if (!isVisible) return null;
+
    return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
          <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-3">
@@ -455,8 +565,23 @@ function InputField({
       </div>
    );
 }
-
 // ── Componente principal ──────────────────────────────────────────────────
+type ContaSectionKey =
+   | "perfil"
+   | "seguranca"
+   | "pagamentos"
+   | "preferencias"
+   | "conta"
+   | "suporte";
+
+const CONTA_SECOES: { id: ContaSectionKey; label: string }[] = [
+   { id: "perfil", label: "Perfil" },
+   { id: "seguranca", label: "Segurança" },
+   { id: "pagamentos", label: "Pagamentos" },
+   { id: "preferencias", label: "Preferências" },
+   { id: "conta", label: "Conta" },
+   { id: "suporte", label: "Suporte" },
+];
 export default function MinhaContaPage() {
    const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
    const [loading, setLoading] = useState(true);
@@ -504,7 +629,21 @@ export default function MinhaContaPage() {
       type: "success" | "error";
       msg: string;
    } | null>(null);
+   const [secaoAtiva, setSecaoAtiva] = useState<ContaSectionKey>("perfil");
 
+   // Formas de pagamento
+   const [tiposPagamento, setTiposPagamento] = useState<TipoPagamento[]>([]);
+   const [novaFormaPagamento, setNovaFormaPagamento] = useState("");
+   const [carregandoTiposPagamento, setCarregandoTiposPagamento] =
+      useState(true);
+   const [salvandoTipoPagamento, setSalvandoTipoPagamento] = useState(false);
+   const [tipoPagamentoProcessandoId, setTipoPagamentoProcessandoId] = useState<
+      number | null
+   >(null);
+   const [feedbackTipoPagamento, setFeedbackTipoPagamento] = useState<{
+      type: "success" | "error";
+      msg: string;
+   } | null>(null);
    // Suporte
    const [tipoSuporte, setTipoSuporte] = useState<TipoSuporte>("duvida");
    const [assunto, setAssunto] = useState("");
@@ -542,8 +681,82 @@ export default function MinhaContaPage() {
          .catch(() => {})
          .finally(() => setLoading(false));
    }, []);
+   const carregarTiposPagamento = useCallback(async () => {
+      setCarregandoTiposPagamento(true);
+      try {
+         const tipos = await tipoPagamentoService.listar(false);
+         setTiposPagamento(tipos);
+      } catch {
+         setFeedbackTipoPagamento({
+            type: "error",
+            msg: "Não foi possível carregar as formas de pagamento.",
+         });
+      } finally {
+         setCarregandoTiposPagamento(false);
+      }
+   }, []);
 
-   // ── Salvar perfil ─────────────────────────────────────────
+   useEffect(() => {
+      carregarTiposPagamento();
+   }, [carregarTiposPagamento]);
+
+   const adicionarFormaPagamento = async () => {
+      const nomeNormalizado = novaFormaPagamento.trim();
+      if (nomeNormalizado.length < 2) {
+         setFeedbackTipoPagamento({
+            type: "error",
+            msg: "Informe pelo menos 2 caracteres.",
+         });
+         return;
+      }
+
+      setSalvandoTipoPagamento(true);
+      setFeedbackTipoPagamento(null);
+      try {
+         await tipoPagamentoService.criar(nomeNormalizado);
+         setNovaFormaPagamento("");
+         setFeedbackTipoPagamento({
+            type: "success",
+            msg: "Forma de pagamento criada para sua conta.",
+         });
+         await carregarTiposPagamento();
+      } catch (err: unknown) {
+         setFeedbackTipoPagamento({
+            type: "error",
+            msg: getApiErrorMessage(
+               err,
+               "Não foi possível salvar essa forma de pagamento.",
+            ),
+         });
+      } finally {
+         setSalvandoTipoPagamento(false);
+      }
+   };
+
+   const inativarFormaPagamentoPersonalizada = async (id: number) => {
+      setTipoPagamentoProcessandoId(id);
+      setFeedbackTipoPagamento(null);
+      try {
+         await tipoPagamentoService.inativar(id);
+         setFeedbackTipoPagamento({
+            type: "success",
+            msg: "Forma de pagamento removida da sua lista.",
+         });
+         await carregarTiposPagamento();
+      } catch (err: unknown) {
+         setFeedbackTipoPagamento({
+            type: "error",
+            msg: getApiErrorMessage(
+               err,
+               "Não foi possível remover essa forma de pagamento.",
+            ),
+         });
+      } finally {
+         setTipoPagamentoProcessandoId(null);
+      }
+   };
+
+   // ── Salvar perfil ─────────────────────────────────────
    const salvarPerfil = async () => {
       if (!nome.trim()) return;
       setSalvandoPerfil(true);
@@ -569,7 +782,7 @@ export default function MinhaContaPage() {
       }
    };
 
-   // ── Upload de foto ────────────────────────────────────────
+   // ── Upload de foto ────────────────────────────────────
    // Abre o cropper ao selecionar arquivo
    const handleFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -615,7 +828,7 @@ export default function MinhaContaPage() {
       }
    };
 
-   // ── Solicitar troca de senha ──────────────────────────────
+   // ── Solicitar troca de senha ──────────────────────────
    const solicitarEmail = async () => {
       if (!novoEmail.trim() || !novoEmail.includes("@")) {
          setFeedbackEmail({ type: "error", msg: "Informe um email válido." });
@@ -634,10 +847,10 @@ export default function MinhaContaPage() {
          const res = await contaService.solicitarTrocaEmail(novoEmail.trim());
          setFeedbackEmail({ type: "success", msg: res.message });
          setNovoEmail("");
-      } catch (err: any) {
+      } catch (err: unknown) {
          setFeedbackEmail({
             type: "error",
-            msg: err?.response?.data?.error || "Erro ao solicitar alteração.",
+            msg: getApiErrorMessage(err, "Erro ao solicitar alteração."),
          });
       } finally {
          setSolicitandoEmail(false);
@@ -660,7 +873,7 @@ export default function MinhaContaPage() {
       }
    };
 
-   // ── Salvar preferências ───────────────────────────────────
+   // ── Salvar preferências ───────────────────────────────
    const salvarPrefs = async () => {
       setSalvandoPrefs(true);
       setFeedbackPrefs(null);
@@ -682,7 +895,7 @@ export default function MinhaContaPage() {
       }
    };
 
-   // ── Enviar suporte ────────────────────────────────────────
+   // ── Enviar suporte ────────────────────────────────────
    const enviarSuporte = async () => {
       if (!assunto.trim() || !mensagem.trim()) return;
       setEnviandoSuporte(true);
@@ -697,10 +910,10 @@ export default function MinhaContaPage() {
          setAssunto("");
          setMensagem("");
          setTipoSuporte("duvida");
-      } catch (err: any) {
+      } catch (err: unknown) {
          setFeedbackSuporte({
             type: "error",
-            msg: err?.response?.data?.error || "Erro ao enviar mensagem.",
+            msg: getApiErrorMessage(err, "Erro ao enviar mensagem."),
          });
       } finally {
          setEnviandoSuporte(false);
@@ -708,6 +921,12 @@ export default function MinhaContaPage() {
       }
    };
 
+   const formasPadrao = tiposPagamento.filter(
+      (tp) => (tp.is_padrao ?? tp.user_id == null) === true,
+   );
+   const minhasFormas = tiposPagamento.filter(
+      (tp) => (tp.pertence_ao_usuario ?? tp.user_id != null) === true,
+   );
    if (loading) {
       return (
          <DashboardLayout>
@@ -720,18 +939,88 @@ export default function MinhaContaPage() {
 
    return (
       <DashboardLayout>
-         <div className="max-w-2xl mx-auto space-y-6 pb-10">
+         <div className="max-w-4xl mx-auto space-y-6 pb-10">
             {/* Cabeçalho */}
-            <div data-help-id="conta-header">
-               <h1 className="text-xl font-bold text-gray-900">Minha Conta</h1>
-               <p className="text-sm text-gray-500 mt-0.5">
-                  Gerencie seu perfil, segurança e preferências
-               </p>
+            <div data-help-id="conta-header" className="space-y-4">
+               <div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                     Minha Conta
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                     Organize seu perfil, segurança e preferências em um só
+                     lugar
+                  </p>
+               </div>
+
+               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                     <div className="flex items-center gap-3">
+                        <Avatar
+                           foto_url={perfil?.foto_url}
+                           nome={perfil?.nome || "U"}
+                           size="sm"
+                        />
+                        <div>
+                           <p className="text-sm font-semibold text-gray-800">
+                              {perfil?.nome}
+                           </p>
+                           <p className="text-xs text-gray-500">
+                              {perfil?.email}
+                           </p>
+                        </div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                        <div className="bg-gray-50 rounded-xl px-3 py-2">
+                           <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                              Plano
+                           </p>
+                           <p className="font-semibold text-gray-700 capitalize">
+                              {perfil?.tipo_plano === "free"
+                                 ? "Gratuito"
+                                 : perfil?.tipo_plano}
+                           </p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl px-3 py-2">
+                           <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                              Cadastro
+                           </p>
+                           <p className="font-semibold text-gray-700">
+                              {perfil?.created_at
+                                 ? new Date(
+                                      perfil.created_at,
+                                   ).toLocaleDateString("pt-BR")
+                                 : "—"}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
             </div>
 
             {/* ── SEÇÃO: PERFIL ───────────────────────────── */}
+
+
+               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2">
+                  <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                     {CONTA_SECOES.map((secao) => (
+                        <button
+                           key={secao.id}
+                           onClick={() => setSecaoAtiva(secao.id)}
+                           className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                              secaoAtiva === secao.id
+                                 ? "bg-green-600 text-white"
+                                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                           }`}
+                        >
+                           {secao.label}
+                        </button>
+                     ))}
+                  </div>
+               </div>
+
             <SectionCard
                title="Perfil"
+               isVisible={secaoAtiva === "perfil"}
                subtitle="Suas informações pessoais"
                icon={
                   <svg
@@ -873,9 +1162,12 @@ export default function MinhaContaPage() {
                </div>
             </SectionCard>
 
-            {/* ── SEÇÃO: SEGURANÇA ─────────────────────────── */}
+            {/* ── SEÇÃO: SEGURANÇA ────────────────────────── */}
+
+
             <SectionCard
                title="Segurança"
+               isVisible={secaoAtiva === "seguranca"}
                subtitle="Gerencie sua senha com segurança"
                icon={
                   <svg
@@ -1062,9 +1354,138 @@ export default function MinhaContaPage() {
                </div>
             </SectionCard>
 
-            {/* ── SEÇÃO: PREFERÊNCIAS ──────────────────────── */}
+            {/* -- SEÇÃO: FORMAS DE PAGAMENTO ----------------- */}
+
+
+            <SectionCard
+               title="Formas de pagamento"
+               isVisible={secaoAtiva === "pagamentos"}
+               subtitle="As padrão são globais; as suas aparecem só para você"
+               icon={
+                  <svg
+                     className="w-5 h-5"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                  >
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 9V7a5 5 0 00-10 0v2m-2 0h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z"
+                     />
+                  </svg>
+               }
+            >
+               <div className="space-y-5">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                        Nova forma personalizada
+                     </label>
+                     <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                           type="text"
+                           value={novaFormaPagamento}
+                           onChange={(e) =>
+                              setNovaFormaPagamento(e.target.value)
+                           }
+                           placeholder="Ex: Vale Refeição"
+                           maxLength={50}
+                           className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        <button
+                           onClick={adicionarFormaPagamento}
+                           disabled={salvandoTipoPagamento}
+                           className="px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
+                        >
+                           {salvandoTipoPagamento ? "Salvando..." : "Adicionar"}
+                        </button>
+                     </div>
+                     <p className="text-xs text-gray-500 mt-2">
+                        Essa forma será exibida apenas na sua conta.
+                     </p>
+                  </div>
+
+                  {feedbackTipoPagamento && (
+                     <FeedbackBox
+                        type={feedbackTipoPagamento.type}
+                        message={feedbackTipoPagamento.msg}
+                     />
+                  )}
+
+                  {carregandoTiposPagamento ? (
+                     <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                        Carregando formas de pagamento...
+                     </div>
+                  ) : (
+                     <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-xl border border-gray-100 p-4">
+                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                              Padrão do sistema
+                           </p>
+                           <div className="flex flex-wrap gap-2">
+                              {formasPadrao.map((tp) => (
+                                 <span
+                                    key={tp.id}
+                                    className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100"
+                                 >
+                                    {tp.nome}
+                                 </span>
+                              ))}
+                           </div>
+                        </div>
+
+                        <div className="rounded-xl border border-gray-100 p-4">
+                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                              Minhas formas
+                           </p>
+                           {minhasFormas.length === 0 ? (
+                              <p className="text-sm text-gray-500">
+                                 Você ainda não criou formas personalizadas.
+                              </p>
+                           ) : (
+                              <div className="space-y-2">
+                                 {minhasFormas.map((tp) => (
+                                    <div
+                                       key={tp.id}
+                                       className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 px-3 py-2"
+                                    >
+                                       <span className="text-sm font-medium text-gray-700">
+                                          {tp.nome}
+                                       </span>
+                                       <button
+                                          onClick={() =>
+                                             inativarFormaPagamentoPersonalizada(
+                                                tp.id,
+                                             )
+                                          }
+                                          disabled={
+                                             tipoPagamentoProcessandoId ===
+                                             tp.id
+                                          }
+                                          className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                                       >
+                                          {tipoPagamentoProcessandoId === tp.id
+                                             ? "Removendo..."
+                                             : "Remover"}
+                                       </button>
+                                    </div>
+                                 ))}
+                              </div>
+                           )}
+                        </div>
+                     </div>
+                  )}
+               </div>
+            </SectionCard>
+
+            {/* ── SEÇÃO: PREFERÊNCIAS ─────────────────────── */}
+
+
             <SectionCard
                title="Preferências"
+               isVisible={secaoAtiva === "preferencias"}
                subtitle="Personalize sua experiência"
                icon={
                   <svg
@@ -1168,9 +1589,12 @@ export default function MinhaContaPage() {
                </div>
             </SectionCard>
 
-            {/* ── SEÇÃO: MINHA CONTA (info) ─────────────────── */}
+            {/* ── SEÇÃO: MINHA CONTA (info) ───────────────── */}
+
+
             <SectionCard
                title="Informações da conta"
+               isVisible={secaoAtiva === "conta"}
                subtitle="Detalhes do seu plano e cadastro"
                icon={
                   <svg
@@ -1222,9 +1646,12 @@ export default function MinhaContaPage() {
                </div>
             </SectionCard>
 
-            {/* ── SEÇÃO: SUPORTE ───────────────────────────── */}
+            {/* ── SEÇÃO: SUPORTE ──────────────────────────── */}
+
+
             <SectionCard
                title="Suporte & Feedback"
+               isVisible={secaoAtiva === "suporte"}
                subtitle="Envie dúvidas, sugestões ou reclamações"
                icon={
                   <svg
@@ -1426,4 +1853,3 @@ export default function MinhaContaPage() {
       </DashboardLayout>
    );
 }
-

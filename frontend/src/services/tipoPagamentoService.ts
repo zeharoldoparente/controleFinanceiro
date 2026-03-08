@@ -5,6 +5,9 @@ export interface TipoPagamento {
    nome: string;
    ativa: boolean;
    created_at?: string;
+   user_id?: number | null;
+   is_padrao?: boolean;
+   pertence_ao_usuario?: boolean;
 }
 
 const tipoPagamentoService = {

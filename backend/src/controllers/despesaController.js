@@ -57,7 +57,7 @@ class DespesaController {
          }
 
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id);
+            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -198,6 +198,14 @@ class DespesaController {
          const despesa = await Despesa.findById(id, mesa_id);
          if (!despesa)
             return res.status(404).json({ error: "Despesa não encontrada" });
+
+         if (tipo_pagamento_id) {
+            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
+            if (!tp || !tp.ativa)
+               return res
+                  .status(400)
+                  .json({ error: "Tipo de pagamento inválido ou inativo" });
+         }
 
          await Despesa.update(id, mesa_id, {
             descricao,
@@ -556,3 +564,4 @@ class DespesaController {
 }
 
 module.exports = DespesaController;
+

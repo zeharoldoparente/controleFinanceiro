@@ -33,7 +33,7 @@ class ReceitaController {
                .json({ error: "Você não tem acesso a esta mesa" });
 
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id);
+            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -169,7 +169,7 @@ class ReceitaController {
             return res.status(404).json({ error: "Receita não encontrada" });
 
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id);
+            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -376,3 +376,4 @@ class ReceitaController {
 }
 
 module.exports = ReceitaController;
+

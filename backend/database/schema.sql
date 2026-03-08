@@ -125,10 +125,16 @@ CREATE TABLE bandeiras (
 -- ============================================================
 CREATE TABLE tipos_pagamento (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  nome VARCHAR(50) NOT NULL UNIQUE,
+  nome VARCHAR(50) NOT NULL,
+  user_id INT DEFAULT NULL COMMENT 'NULL = padrao global; preenchido = personalizado do usuario',
   ativa BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_tipos_pagamento_nome (nome),
+  INDEX idx_tipos_pagamento_user_id (user_id),
+  INDEX idx_tipos_pagamento_ativa (ativa)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
