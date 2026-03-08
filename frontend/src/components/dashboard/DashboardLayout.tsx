@@ -311,7 +311,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             >
                <Header onMenuToggle={toggleSidebar} sidebarOpen={sidebarOpen} />
 
-               <main className="pt-16 px-4 md:px-6">{children}</main>
+               <main className="pt-16 px-4 md:px-6 pb-24 sm:pb-10">{children}</main>
             </div>
 
             {!tutorialOpen && (
@@ -454,5 +454,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </MesaProvider>
    );
 }
+
 
 
