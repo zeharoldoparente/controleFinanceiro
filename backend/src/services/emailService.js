@@ -210,22 +210,6 @@ function baseTemplate({ headerTitle, headerSubtitle, body }) {
 
 class EmailService {
    constructor() {
-      this.provider = (
-         process.env.EMAIL_PROVIDER ||
-         (process.env.RESEND_API_KEY ? "resend" : "smtp")
-      ).toLowerCase();
-
-      if (this.provider === "resend") {
-         if (!process.env.RESEND_API_KEY) {
-            console.error(
-               "[EMAIL] EMAIL_PROVIDER=resend, mas RESEND_API_KEY nao foi definida",
-            );
-         } else {
-            console.log("[EMAIL] Provider configurado: RESEND (API HTTP)");
-         }
-         return;
-      }
-
       const port = parseInt(process.env.EMAIL_PORT || "587", 10);
       const secure = port === 465;
 
@@ -270,14 +254,6 @@ class EmailService {
    }
 
    async sendMail(mailOptions) {
-      if (this.provider === "resend") {
-         return this.sendMailViaResend(mailOptions);
-      }
-
-      return this.sendMailViaSmtp(mailOptions);
-   }
-
-   async sendMailViaSmtp(mailOptions) {
       try {
          const info = await this.transporter.sendMail(mailOptions);
          console.log("[EMAIL] Enviado:", {
@@ -302,64 +278,6 @@ class EmailService {
       }
    }
 
-   async sendMailViaResend(mailOptions) {
-      if (!process.env.RESEND_API_KEY) {
-         throw new Error("RESEND_API_KEY nao configurada");
-      }
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const to = Array.isArray(mailOptions.to)
-         ? mailOptions.to
-         : [mailOptions.to];
-
-      try {
-         const response = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-               Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-               "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-               from: mailOptions.from || process.env.EMAIL_FROM,
-               to,
-               subject: mailOptions.subject,
-               html: mailOptions.html,
-               reply_to: mailOptions.replyTo,
-            }),
-            signal: controller.signal,
-         });
-
-         const data = await response.json().catch(() => ({}));
-
-         if (!response.ok) {
-            const message =
-               data?.message ||
-               data?.error?.message ||
-               `Resend retornou status ${response.status}`;
-            throw new Error(message);
-         }
-
-         console.log("[EMAIL][RESEND] Enviado:", {
-            to,
-            subject: mailOptions.subject,
-            id: data?.id,
-         });
-
-         return data;
-      } catch (error) {
-         const message =
-            error?.name === "AbortError" ? "Resend timeout" : error.message;
-         console.error("[EMAIL][RESEND] Erro ao enviar:", {
-            to,
-            subject: mailOptions.subject,
-            message,
-         });
-         throw error;
-      } finally {
-         clearTimeout(timeout);
-      }
-   }
 
    // ── 1. Verificação de Email ──────────────────────────────
    async enviarEmailVerificacao(para, nome, token) {
