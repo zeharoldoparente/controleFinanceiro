@@ -138,7 +138,7 @@ export default function CategoriasPage() {
       <DashboardLayout>
          <div className="space-y-4 md:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div data-help-id="categorias-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                <div>
                   <h1 className="text-xl md:text-2xl font-bold text-gray-800">
                      Categorias
@@ -149,6 +149,7 @@ export default function CategoriasPage() {
                </div>
 
                <button
+                  data-help-id="categorias-new-button"
                   onClick={() => abrirModal()}
                   className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md text-sm font-medium"
                >
@@ -587,3 +588,4 @@ export default function CategoriasPage() {
       </DashboardLayout>
    );
 }
+

@@ -489,7 +489,7 @@ export default function DashboardPage() {
       <DashboardLayout>
          <div className="space-y-5 md:space-y-6">
             {/* ── Header ─────────────────────────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div data-help-id="dashboard-header" className="flex flex-col sm:flex-row sm:items-center gap-3">
                <div className="flex-1">
                   <h1 className="text-xl md:text-2xl font-bold text-gray-800">
                      Dashboard
@@ -1210,3 +1210,4 @@ export default function DashboardPage() {
       </DashboardLayout>
    );
 }
+

@@ -722,7 +722,7 @@ export default function MinhaContaPage() {
       <DashboardLayout>
          <div className="max-w-2xl mx-auto space-y-6 pb-10">
             {/* Cabeçalho */}
-            <div>
+            <div data-help-id="conta-header">
                <h1 className="text-xl font-bold text-gray-900">Minha Conta</h1>
                <p className="text-sm text-gray-500 mt-0.5">
                   Gerencie seu perfil, segurança e preferências
@@ -1426,3 +1426,4 @@ export default function MinhaContaPage() {
       </DashboardLayout>
    );
 }
+
