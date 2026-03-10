@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import authService from "@/services/authService";
@@ -12,6 +12,30 @@ export default function LoginPage() {
    const [senha, setSenha] = useState("");
    const [erro, setErro] = useState("");
    const [carregando, setCarregando] = useState(false);
+   const [conviteToken, setConviteToken] = useState("");
+   const [emailConvite, setEmailConvite] = useState("");
+
+   useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("convite") || "";
+      const emailParam = params.get("email") || "";
+
+      setConviteToken(token);
+      setEmailConvite(emailParam);
+
+      if (token && authService.isAuthenticated()) {
+         router.replace(`/convites/${encodeURIComponent(token)}`);
+         return;
+      }
+
+      if (emailParam) {
+         setEmail(emailParam);
+      }
+   }, [router]);
+
+   const registroHref = conviteToken
+      ? `/registro?convite=${encodeURIComponent(conviteToken)}${emailConvite ? `&email=${encodeURIComponent(emailConvite)}` : ""}`
+      : "/registro";
 
    const handleSubmit = async (e: FormEvent) => {
       e.preventDefault();
@@ -21,10 +45,13 @@ export default function LoginPage() {
       try {
          const response = await authService.login({ email, senha });
 
-         // Login bem-sucedido
          console.log("Login bem-sucedido:", response);
 
-         // Redirecionar para dashboard
+         if (conviteToken) {
+            router.push(`/convites/${encodeURIComponent(conviteToken)}`);
+            return;
+         }
+
          router.push("/dashboard");
       } catch (error) {
          console.error("Erro no login:", error);
@@ -47,11 +74,8 @@ export default function LoginPage() {
 
    return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
-         {/* Card Principal */}
          <div className="bg-white/80 backdrop-blur-sm p-10 rounded-3xl shadow-2xl w-full max-w-md border border-green-100/50 pb-2">
-            {/* Logo e Branding */}
             <div className="text-center mb-8">
-               {/* Logo */}
                <div className="flex justify-center">
                   <div className="relative drop-shadow-lg">
                      <Image
@@ -64,14 +88,13 @@ export default function LoginPage() {
                      />
                   </div>
                </div>
-               {/* Slogan */}
                <p className="text-sm text-gray-500 font-light mt-2">
-                  Gerencie suas finanças com inteligência
+                  Gerencie suas financas com inteligencia
                </p>
             </div>
-            {/* Divisória sutil */}
+
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-8" />
-            {/* Mensagem de Erro */}
+
             {erro && (
                <div>
                   <p className="text-sm font-semibold text-red-700 text-center">
@@ -79,9 +102,8 @@ export default function LoginPage() {
                   </p>
                </div>
             )}
-            {/* Form */}
+
             <form onSubmit={handleSubmit} className="space-y-5">
-               {/* Email */}
                <div>
                   <label
                      htmlFor="email"
@@ -101,7 +123,6 @@ export default function LoginPage() {
                   />
                </div>
 
-               {/* Senha */}
                <div>
                   <label
                      htmlFor="password"
@@ -112,7 +133,7 @@ export default function LoginPage() {
                   <input
                      id="password"
                      type="password"
-                     placeholder="••••••••"
+                     placeholder="********"
                      value={senha}
                      onChange={(e) => setSenha(e.target.value)}
                      required
@@ -120,7 +141,7 @@ export default function LoginPage() {
                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm"
                   />
                </div>
-               {/* Botão */}
+
                <button
                   type="submit"
                   disabled={carregando}
@@ -129,7 +150,7 @@ export default function LoginPage() {
                   {carregando ? "Entrando..." : "Entrar"}
                </button>
             </form>
-            {/* Links */}
+
             <div className="pt-2 text-center space-y-2 mb-8">
                <a
                   href="/recuperar-senha"
@@ -138,18 +159,18 @@ export default function LoginPage() {
                   Esqueci minha senha
                </a>
                <p className="text-xs text-gray-500">
-                  Não tem conta?{" "}
+                  Nao tem conta?{" "}
                   <a
-                     href="/registro"
+                     href={registroHref}
                      className="text-green-600 font-semibold hover:text-green-700 transition-colors duration-200"
                   >
                      Criar conta
                   </a>
                </p>
             </div>
-            {/* Divisória sutil */}
+
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
-            {/* NASAMDev */}
+
             <div className="mt-8 text-center">
                <p className="text-[10px] text-gray-500 flex items-center justify-center gap-2">
                   Desenvolvido e mantido por{" "}
@@ -164,7 +185,7 @@ export default function LoginPage() {
                </p>
             </div>
          </div>
-         {/* Elemento decorativo de fundo */}
+
          <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
             <div className="absolute -top-40 -right-40 w-96 h-96 bg-green-200 rounded-full blur-3xl opacity-20" />
             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-200 rounded-full blur-3xl opacity-20" />

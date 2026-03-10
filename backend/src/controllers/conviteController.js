@@ -5,6 +5,36 @@ const db = require("../config/database");
 const emailService = require("../services/emailService");
 
 class ConviteController {
+   static async marcarNotificacaoConviteProcessada(userId, token, mensagem) {
+      const link = `/convites/${token}`;
+
+      try {
+         await db.query(
+            `UPDATE notificacoes
+             SET mensagem = ?
+             WHERE user_id = ?
+               AND tipo = 'convite_mesa'
+               AND link = ?`,
+            [mensagem, userId, link],
+         );
+
+         await db.query(
+            `UPDATE notificacoes
+             SET dados_extras = JSON_SET(
+                  COALESCE(dados_extras, JSON_OBJECT()),
+                  '$.processado',
+                  CAST('true' AS JSON)
+               )
+             WHERE user_id = ?
+               AND tipo = 'convite_mesa'
+               AND link = ?`,
+            [userId, link],
+         );
+      } catch (error) {
+         console.error("Erro ao atualizar notificacao de convite:", error);
+      }
+   }
+
    static async create(req, res) {
       try {
          const { mesa_id, email_convidado } = req.body;
@@ -230,8 +260,16 @@ class ConviteController {
          );
 
          await Convite.aceitar(convite.id, token);
+         await ConviteController.marcarNotificacaoConviteProcessada(
+            userId,
+            token,
+            "Convite aceito com sucesso. Marque como lida quando quiser.",
+         );
 
-         res.json({ message: "Convite aceito com sucesso!" });
+         res.json({
+            message: "Convite aceito com sucesso!",
+            mesa_id: convite.mesa_id,
+         });
       } catch (error) {
          console.error(error);
          res.status(500).json({ error: "Erro ao aceitar convite" });
@@ -242,6 +280,7 @@ class ConviteController {
       try {
          const { token } = req.params;
          const userEmail = req.userEmail;
+         const userId = req.userId;
 
          const convite = await Convite.findByToken(token);
 
@@ -262,6 +301,11 @@ class ConviteController {
          }
 
          await Convite.recusar(convite.id, token);
+         await ConviteController.marcarNotificacaoConviteProcessada(
+            userId,
+            token,
+            "Convite recusado. Marque como lida quando quiser.",
+         );
 
          res.json({ message: "Convite recusado" });
       } catch (error) {
@@ -272,3 +316,4 @@ class ConviteController {
 }
 
 module.exports = ConviteController;
+

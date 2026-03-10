@@ -315,7 +315,7 @@ class EmailService {
 
    // ── 2. Convite para usuário SEM cadastro ─────────────────
    async enviarEmailConviteNovo(para, nomeQuemConvidou, nomeMesa, token) {
-      const link = `${this.getFrontendUrl()}/cadastro?convite=${token}`;
+      const link = `${this.getFrontendUrl()}/registro?convite=${token}&email=${encodeURIComponent(para)}`;
 
       const html = baseTemplate({
          headerTitle: "Você foi convidado!",
@@ -359,7 +359,7 @@ class EmailService {
       nomeConvidado,
       token,
    ) {
-      const link = `${this.getFrontendUrl()}/dashboard/mesas`;
+      const link = `${this.getFrontendUrl()}/login?convite=${token}&email=${encodeURIComponent(para)}`;
       const primeiroNome = (nomeConvidado || "").split(" ")[0] || "você";
 
       const html = baseTemplate({

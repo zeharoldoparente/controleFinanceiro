@@ -17,10 +17,10 @@ function fmtTempo(iso: string) {
    const diff = Date.now() - new Date(iso).getTime();
    const m = Math.floor(diff / 60000);
    if (m < 1) return "agora";
-   if (m < 60) return `${m}m atrás`;
+   if (m < 60) return `${m}m atras`;
    const h = Math.floor(m / 60);
-   if (h < 24) return `${h}h atrás`;
-   return `${Math.floor(h / 24)}d atrás`;
+   if (h < 24) return `${h}h atras`;
+   return `${Math.floor(h / 24)}d atras`;
 }
 
 export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
@@ -31,7 +31,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
       useMesa();
    const [dropdownMesa, setDropdownMesa] = useState(false);
 
-   // Notificações
+   // Notificacoes
    const [notifOpen, setNotifOpen] = useState(false);
    const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
    const [naoLidas, setNaoLidas] = useState(0);
@@ -42,13 +42,13 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
    const notifRef = useRef<HTMLDivElement>(null);
    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-   // useCallback garante referência estável para o useEffect e o setInterval
+   // useCallback garante referencia estavel para o useEffect e o setInterval
    const carregarContagemNaoLidas = useCallback(async () => {
       try {
          const { total } = await notificacaoService.countNaoLidas();
          setNaoLidas(total);
       } catch {
-         // silencioso — não quebrar a UI se backend estiver offline
+         // silencioso - nao quebrar a UI se backend estiver offline
       }
    }, []);
 
@@ -68,7 +68,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
       // Carrega contagem inicial
       carregarContagemNaoLidas();
 
-      // Polling a cada 60s — usando ref para garantir único interval ativo
+      // Polling a cada 60s - usando ref para garantir unico interval ativo
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(carregarContagemNaoLidas, 60000);
 
@@ -132,12 +132,30 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
    const aceitarConvite = async (notif: Notificacao) => {
       const token = notif.dados_extras?.token as string;
       if (!token) return;
+
       setAceitandoConvite(notif.id);
       try {
-         await conviteService.aceitar(token);
-         await marcarLida(notif);
+         const data = await conviteService.aceitar(token);
+
+         if (typeof data?.mesa_id === "number") {
+            localStorage.setItem("mesaSelecionadaId", String(data.mesa_id));
+         }
+
          await recarregarMesas();
-         setNotificacoes((prev) => prev.filter((n) => n.id !== notif.id));
+         setNotificacoes((prev) =>
+            prev.map((n) =>
+               n.id === notif.id
+                  ? {
+                       ...n,
+                       mensagem: "Convite aceito com sucesso. Marque como lida quando quiser.",
+                       dados_extras: {
+                          ...n.dados_extras,
+                          processado: true,
+                       },
+                    }
+                  : n,
+            ),
+         );
       } catch {
          alert("Erro ao aceitar convite. Tente novamente.");
       } finally {
@@ -148,10 +166,23 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
    const recusarConvite = async (notif: Notificacao) => {
       const token = notif.dados_extras?.token as string;
       if (!token) return;
+
       try {
          await conviteService.recusar(token);
-         await marcarLida(notif);
-         setNotificacoes((prev) => prev.filter((n) => n.id !== notif.id));
+         setNotificacoes((prev) =>
+            prev.map((n) =>
+               n.id === notif.id
+                  ? {
+                       ...n,
+                       mensagem: "Convite recusado. Marque como lida quando quiser.",
+                       dados_extras: {
+                          ...n.dados_extras,
+                          processado: true,
+                       },
+                    }
+                  : n,
+            ),
+         );
       } catch {
          alert("Erro ao recusar convite. Tente novamente.");
       }
@@ -216,7 +247,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                               />
                            </svg>
                            <span>
-                              Você está na mesa:{" "}
+                              Voce esta na mesa:{" "}
                               <span className="font-semibold text-green-600">
                                  {mesaSelecionada.nome}
                               </span>
@@ -287,7 +318,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
 
             {/* Direita */}
             <div className="flex items-center space-x-2 md:space-x-4">
-               {/* ── Sino de Notificações ── */}
+               {/* Sino de Notificacoes */}
                <div ref={notifRef} className="relative">
                   <button
                      onClick={abrirNotificacoes}
@@ -313,14 +344,14 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                      )}
                   </button>
 
-                  {/* Dropdown de notificações */}
+                  {/* Dropdown de notificacoes */}
                   {notifOpen && (
                      <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
                         {/* Header do dropdown */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                            <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold text-gray-800">
-                                 Notificações
+                                 Notificacoes
                               </span>
                               {naoLidas > 0 && (
                                  <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -360,7 +391,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                                     />
                                  </svg>
                                  <p className="text-sm text-gray-400">
-                                    Nenhuma notificação
+                                    Nenhuma notificacao
                                  </p>
                               </div>
                            ) : (
@@ -374,7 +405,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                                     }`}
                                  >
                                     <div className="flex items-start gap-3">
-                                       {/* Ícone por tipo */}
+                                       {/* Icone por tipo */}
                                        <div
                                           className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                                              notif.tipo === "convite_mesa"
@@ -433,10 +464,14 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                                              {notif.mensagem}
                                           </p>
 
-                                          {/* Botões de convite */}
+                                          {/* Botoes de convite */}
                                           {notif.tipo === "convite_mesa" &&
                                              typeof notif.dados_extras?.token === "string" &&
-                                             !notif.lida && (
+                                             !notif.lida &&
+                                             !(
+                                                notif.dados_extras?.processado ||
+                                                /^Convite (aceito|recusado)/i.test(notif.mensagem)
+                                             ) && (
                                                 <div className="flex gap-2 mt-2">
                                                    <button
                                                       onClick={() =>
@@ -464,9 +499,8 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                                                 </div>
                                              )}
 
-                                          {/* Marcar como lida para notificações não de convite */}
-                                          {!notif.lida &&
-                                             notif.tipo !== "convite_mesa" && (
+                                          {/* Marcar como lida para notificacoes nao de convite */}
+                                          {!notif.lida && (
                                                 <button
                                                    onClick={() =>
                                                       marcarLida(notif)
@@ -499,7 +533,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                   </div>
                )}
 
-               {/* Botão Sair - Desktop */}
+               {/* Botao Sair - Desktop */}
                <button
                   onClick={handleLogout}
                   className="hidden sm:flex items-center space-x-2 px-3 py-2 text-xs md:text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 rounded-lg hover:from-red-600 hover:to-red-700 transition-all"
@@ -520,7 +554,7 @@ export default function Header({ onMenuToggle, sidebarOpen }: HeaderProps) {
                   <span className="hidden md:inline">Sair</span>
                </button>
 
-               {/* Botão Sair - Mobile */}
+               {/* Botao Sair - Mobile */}
                <button
                   onClick={handleLogout}
                   className="sm:hidden p-2 rounded-lg bg-red-500 hover:bg-red-600 transition-colors"

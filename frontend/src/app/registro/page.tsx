@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import authService from "@/services/authService";
@@ -10,6 +10,8 @@ import { isApiError } from "@/types";
 
 export default function RegistroPage() {
    const router = useRouter();
+   const [conviteToken, setConviteToken] = useState("");
+   const [emailConvite, setEmailConvite] = useState("");
    const [nome, setNome] = useState("");
    const [email, setEmail] = useState("");
    const [senha, setSenha] = useState("");
@@ -19,7 +21,23 @@ export default function RegistroPage() {
    const [sucesso, setSucesso] = useState("");
    const [carregando, setCarregando] = useState(false);
 
-   // Validar senha em tempo real
+   useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("convite") || "";
+      const emailParam = params.get("email") || "";
+
+      setConviteToken(token);
+      setEmailConvite(emailParam);
+
+      if (emailParam) {
+         setEmail(emailParam);
+      }
+   }, []);
+
+   const loginHref = conviteToken
+      ? `/login?convite=${encodeURIComponent(conviteToken)}${emailConvite ? `&email=${encodeURIComponent(emailConvite)}` : ""}`
+      : "/login";
+
    const handleSenhaChange = (novaSenha: string) => {
       setSenha(novaSenha);
       const resultado = validarSenha(novaSenha);
@@ -31,22 +49,21 @@ export default function RegistroPage() {
       setErro("");
       setSucesso("");
 
-      // Validar senha
       const validacao = validarSenha(senha);
       if (!validacao.valida) {
-         setErro("Senha não atende aos requisitos de segurança");
+         setErro("Senha nao atende aos requisitos de seguranca");
          return;
       }
 
-      // Verificar se senhas coincidem
       if (senha !== confirmarSenha) {
-         setErro("As senhas não coincidem");
+         setErro("As senhas nao coincidem");
          return;
       }
 
       setCarregando(true);
 
       try {
+         const emailRegistrado = email;
          await authService.register({ nome, email, senha });
 
          setSucesso(
@@ -59,8 +76,12 @@ export default function RegistroPage() {
          setConfirmarSenha("");
          setErrosSenha([]);
 
+         const destinoLogin = conviteToken
+            ? `/login?convite=${encodeURIComponent(conviteToken)}&email=${encodeURIComponent(emailRegistrado || emailConvite)}`
+            : "/login";
+
          setTimeout(() => {
-            router.push("/login");
+            router.push(destinoLogin);
          }, 3000);
       } catch (error) {
          console.error("Erro no registro:", error);
@@ -69,7 +90,7 @@ export default function RegistroPage() {
             if (error.response?.data?.message) {
                setErro(error.response.data.message);
             } else if (error.response?.status === 400) {
-               setErro("Email já cadastrado ou dados inválidos");
+               setErro("Email ja cadastrado ou dados invalidos");
             } else {
                setErro("Erro ao criar conta. Tente novamente.");
             }
@@ -80,13 +101,11 @@ export default function RegistroPage() {
          setCarregando(false);
       }
    };
+
    return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
-         {/* Card Principal */}
          <div className="bg-white/80 backdrop-blur-sm p-10 rounded-3xl shadow-2xl w-full max-w-md border border-green-100/50 pb-2">
-            {/* Logo e Branding */}
             <div className="text-center mb-8">
-               {/* Logo */}
                <div className="flex justify-center">
                   <div className="relative drop-shadow-lg">
                      <Image
@@ -99,16 +118,13 @@ export default function RegistroPage() {
                      />
                   </div>
                </div>
-               {/* Slogan */}
                <p className="text-sm text-gray-500 font-light mt-2">
-                  Crie sua conta e comece a gerenciar suas finanças
+                  Crie sua conta e comece a gerenciar suas financas
                </p>
             </div>
 
-            {/* Divisória sutil */}
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-8" />
 
-            {/* Mensagem de Erro */}
             {erro && (
                <div className="mb-4">
                   <p className="text-sm font-semibold text-red-700 text-center">
@@ -117,7 +133,6 @@ export default function RegistroPage() {
                </div>
             )}
 
-            {/* Mensagem de Sucesso */}
             {sucesso && (
                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl">
                   <p className="text-sm font-semibold text-green-700 text-center">
@@ -126,9 +141,7 @@ export default function RegistroPage() {
                </div>
             )}
 
-            {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-               {/* Nome */}
                <div>
                   <label
                      htmlFor="nome"
@@ -148,7 +161,6 @@ export default function RegistroPage() {
                   />
                </div>
 
-               {/* Email */}
                <div>
                   <label
                      htmlFor="email"
@@ -168,7 +180,6 @@ export default function RegistroPage() {
                   />
                </div>
 
-               {/* Senha */}
                <div>
                   <label
                      htmlFor="senha"
@@ -179,7 +190,7 @@ export default function RegistroPage() {
                   <input
                      id="senha"
                      type="password"
-                     placeholder="••••••••"
+                     placeholder="********"
                      value={senha}
                      onChange={(e) => handleSenhaChange(e.target.value)}
                      required
@@ -187,41 +198,37 @@ export default function RegistroPage() {
                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm disabled:cursor-not-allowed"
                   />
 
-                  {/* Indicador de força */}
                   <IndicadorSenha senha={senha} />
 
-                  {/* Lista de requisitos */}
                   {senha && errosSenha.length > 0 && (
                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                         <p className="text-xs font-semibold text-red-700 mb-1">
                            Requisitos:
                         </p>
                         <ul className="space-y-1">
-                           {errosSenha.map((erro, index) => (
+                           {errosSenha.map((erroSenha, index) => (
                               <li
                                  key={index}
                                  className="text-xs text-red-600 flex items-start"
                               >
-                                 <span className="mr-1">•</span>
-                                 {erro}
+                                 <span className="mr-1">-</span>
+                                 {erroSenha}
                               </li>
                            ))}
                         </ul>
                      </div>
                   )}
 
-                  {/* Senha válida */}
                   {senha && errosSenha.length === 0 && (
                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
                         <p className="text-xs font-semibold text-green-700 flex items-center">
-                           <span className="mr-1">✓</span>
+                           <span className="mr-1">OK</span>
                            Senha forte e segura!
                         </p>
                      </div>
                   )}
                </div>
 
-               {/* Confirmar Senha */}
                <div>
                   <label
                      htmlFor="confirmarSenha"
@@ -232,7 +239,7 @@ export default function RegistroPage() {
                   <input
                      id="confirmarSenha"
                      type="password"
-                     placeholder="••••••••"
+                     placeholder="********"
                      value={confirmarSenha}
                      onChange={(e) => setConfirmarSenha(e.target.value)}
                      required
@@ -240,28 +247,27 @@ export default function RegistroPage() {
                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-green-50/30 focus:ring-1 focus:ring-green-500/80 focus:border-green-300 outline-none transition-all duration-300 shadow-sm disabled:cursor-not-allowed"
                   />
 
-                  {/* Validação em tempo real */}
                   {confirmarSenha && (
                      <div className="mt-2">
                         {senha === confirmarSenha ? (
                            <div className="p-2 bg-green-50 border border-green-200 rounded-lg">
                               <p className="text-xs font-semibold text-green-700 flex items-center">
-                                 <span className="mr-1">✓</span>
+                                 <span className="mr-1">OK</span>
                                  As senhas coincidem!
                               </p>
                            </div>
                         ) : (
                            <div className="p-2 bg-red-50 border border-red-200 rounded-lg">
                               <p className="text-xs font-semibold text-red-700 flex items-center">
-                                 <span className="mr-1">✗</span>
-                                 As senhas não coincidem
+                                 <span className="mr-1">X</span>
+                                 As senhas nao coincidem
                               </p>
                            </div>
                         )}
                      </div>
                   )}
                </div>
-               {/* Botão */}
+
                <button
                   type="submit"
                   disabled={
@@ -277,12 +283,11 @@ export default function RegistroPage() {
                </button>
             </form>
 
-            {/* Links */}
             <div className="pt-4 text-center">
                <p className="text-xs text-gray-500">
-                  Já tem uma conta?{" "}
+                  Ja tem uma conta?{" "}
                   <a
-                     href="/login"
+                     href={loginHref}
                      className="text-green-600 font-semibold hover:text-green-700 transition-colors duration-200"
                   >
                      Fazer login
@@ -290,10 +295,8 @@ export default function RegistroPage() {
                </p>
             </div>
 
-            {/* Divisória sutil */}
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mt-6" />
 
-            {/* NASAMDev */}
             <div className="mt-8 text-center">
                <p className="text-[10px] text-gray-500 flex items-center justify-center gap-2">
                   Desenvolvido e mantido por{" "}
@@ -309,7 +312,6 @@ export default function RegistroPage() {
             </div>
          </div>
 
-         {/* Elemento decorativo de fundo */}
          <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
             <div className="absolute -top-40 -right-40 w-96 h-96 bg-green-200 rounded-full blur-3xl opacity-20" />
             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-200 rounded-full blur-3xl opacity-20" />
