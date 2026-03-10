@@ -211,7 +211,7 @@ class ConviteController {
          }
 
          const [mesasCompartilhadas] = await db.query(
-            'SELECT COUNT(*) as total FROM mesa_usuarios WHERE user_id = ? AND papel = "convidado"',
+            `SELECT COUNT(*) as total FROM mesa_usuarios WHERE user_id = ? AND papel = 'convidado'`,
             [userId],
          );
 
@@ -225,7 +225,7 @@ class ConviteController {
          }
 
          await db.query(
-            'INSERT INTO mesa_usuarios (mesa_id, user_id, papel) VALUES (?, ?, "convidado")',
+            `INSERT INTO mesa_usuarios (mesa_id, user_id, papel) VALUES (?, ?, 'convidado')`,
             [convite.mesa_id, userId],
          );
 

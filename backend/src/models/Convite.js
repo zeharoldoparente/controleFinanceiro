@@ -242,7 +242,7 @@ class Convite {
       ];
 
       if (map.status) {
-         whereClauses.push(`${this.quoteIdentifier(map.status)} = "pendente"`);
+         whereClauses.push(`${this.quoteIdentifier(map.status)} = 'pendente'`);
       }
 
       const [rows] = await db.query(
@@ -266,7 +266,7 @@ class Convite {
       }
 
       await db.query(
-         `UPDATE convites SET ${this.quoteIdentifier(map.status)} = "aceito" WHERE ${whereClauses.join(" AND ")}`,
+         `UPDATE convites SET ${this.quoteIdentifier(map.status)} = 'aceito' WHERE ${whereClauses.join(" AND ")}`,
          params,
       );
    }
@@ -284,7 +284,7 @@ class Convite {
       }
 
       await db.query(
-         `UPDATE convites SET ${this.quoteIdentifier(map.status)} = "recusado" WHERE ${whereClauses.join(" AND ")}`,
+         `UPDATE convites SET ${this.quoteIdentifier(map.status)} = 'recusado' WHERE ${whereClauses.join(" AND ")}`,
          params,
       );
    }
