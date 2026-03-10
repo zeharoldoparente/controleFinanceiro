@@ -10,6 +10,7 @@ export default function LoginPage() {
    const router = useRouter();
    const [email, setEmail] = useState("");
    const [senha, setSenha] = useState("");
+   const [sucesso, setSucesso] = useState("");
    const [erro, setErro] = useState("");
    const [carregando, setCarregando] = useState(false);
    const [conviteToken, setConviteToken] = useState("");
@@ -19,9 +20,15 @@ export default function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("convite") || "";
       const emailParam = params.get("email") || "";
+      const emailVerificado = params.get("email_verificado") === "1";
 
       setConviteToken(token);
       setEmailConvite(emailParam);
+      setSucesso(
+         emailVerificado
+            ? "Email confirmado com sucesso. Agora e so entrar na sua conta."
+            : "",
+      );
 
       if (token && authService.isAuthenticated()) {
          router.replace(`/convites/${encodeURIComponent(token)}`);
@@ -99,6 +106,14 @@ export default function LoginPage() {
                <div>
                   <p className="text-sm font-semibold text-red-700 text-center">
                      {erro}
+                  </p>
+               </div>
+            )}
+
+            {sucesso && (
+               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-emerald-700 text-center">
+                     {sucesso}
                   </p>
                </div>
             )}
@@ -193,3 +208,4 @@ export default function LoginPage() {
       </div>
    );
 }
+
