@@ -148,7 +148,15 @@ class ConviteController {
       } catch (error) {
          console.error("Erro ao criar convite:", error);
          const errorCode = error?.code ? ` (${error.code})` : "";
-         res.status(500).json({ error: `Erro ao criar convite${errorCode}` });
+         const errorSql =
+            error?.code === "ER_BAD_FIELD_ERROR" && error?.sqlMessage
+               ? `: ${error.sqlMessage}`
+               : "";
+         const errorDetail =
+            !error?.code && error?.message ? `: ${error.message}` : "";
+         res.status(500).json({
+            error: `Erro ao criar convite${errorCode}${errorSql}${errorDetail}`,
+         });
       }
    }
 
