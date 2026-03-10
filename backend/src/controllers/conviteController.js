@@ -1,9 +1,8 @@
 const Convite = require("../models/Convite");
 const Notificacao = require("../models/Notificacao");
 const User = require("../models/User");
-const Mesa = require("../models/Mesa");
 const db = require("../config/database");
-const emailService = require("../services/emailService"); // ← import no topo, uma vez só
+const emailService = require("../services/emailService");
 
 class ConviteController {
    static async create(req, res) {
@@ -15,20 +14,23 @@ class ConviteController {
          if (!mesa_id || !email_convidado) {
             return res
                .status(400)
-               .json({ error: "Mesa e email do convidado são obrigatórios" });
+               .json({ error: "Mesa e email do convidado sao obrigatorios" });
          }
 
          if (email_convidado === userEmail) {
             return res
                .status(400)
-               .json({ error: "Você não pode convidar a si mesmo" });
+               .json({ error: "Voce nao pode convidar a si mesmo" });
          }
 
-         const [mesa] = await db.query(
+         const [mesaRows] = await db.query(
             "SELECT criador_id, nome FROM mesas WHERE id = ?",
             [mesa_id],
          );
-         if (!mesa[0] || parseInt(mesa[0].criador_id) !== parseInt(userId)) {
+
+         const mesa = mesaRows[0];
+
+         if (!mesa || parseInt(mesa.criador_id) !== parseInt(userId)) {
             return res.status(403).json({
                error: "Apenas o criador da mesa pode enviar convites",
             });
@@ -38,9 +40,10 @@ class ConviteController {
             mesa_id,
             email_convidado,
          );
+
          if (conviteExistente) {
             return res.status(400).json({
-               error: "Já existe um convite pendente para este email nesta mesa",
+               error: "Ja existe um convite pendente para este email nesta mesa",
             });
          }
 
@@ -50,10 +53,11 @@ class ConviteController {
              WHERE mu.mesa_id = ? AND u.email = ?`,
             [mesa_id, email_convidado],
          );
+
          if (jaParticipa.length > 0) {
             return res
                .status(400)
-               .json({ error: "Este usuário já faz parte da mesa" });
+               .json({ error: "Este usuario ja faz parte da mesa" });
          }
 
          const { conviteId, token } = await Convite.create(
@@ -64,19 +68,20 @@ class ConviteController {
 
          const usuarioConvidado = await User.findByEmail(email_convidado);
          const userInfo = await User.findById(userId);
-         const nomeMesa = mesa[0].nome;
+         const nomeMesa = mesa.nome;
+         const nomeQuemConvida = userInfo?.nome || "Um usuario";
 
          if (usuarioConvidado) {
             let notificacaoCriada = false;
             let emailEnviado = false;
-            // ── Usuário já tem conta ────────────────────────────────────
-            // Convite ja criado: notificacao e email sao best effort.
+
+            // O convite ja foi criado. Notificacao e email sao best effort.
             try {
                await Notificacao.create(
                   usuarioConvidado.id,
                   "convite_mesa",
                   "Novo convite de mesa",
-                  `${userInfo.nome} convidou voce para participar da mesa "${nomeMesa}"`,
+                  `${nomeQuemConvida} convidou voce para participar da mesa "${nomeMesa}"`,
                   `/convites/${token}`,
                   { convite_id: conviteId, mesa_id, token },
                );
@@ -90,10 +95,10 @@ class ConviteController {
 
             try {
                await emailService.enviarEmailConviteExistente(
-                  email_convidado, // ← era "email" (undefined)
-                  userInfo.nome, // ← era "nomeQuemConvidou" (undefined)
+                  email_convidado,
+                  nomeQuemConvida,
                   nomeMesa,
-                  usuarioConvidado.nome, // ← era "nomeConvidado" (undefined)
+                  usuarioConvidado.nome,
                   token,
                );
                emailEnviado = true;
@@ -115,33 +120,31 @@ class ConviteController {
                   "Convite enviado! O usuario recebera o email, mas a notificacao no app nao foi criada.";
             }
 
-            res.status(201).json({
+            return res.status(201).json({
                message,
                conviteId,
                usuarioCadastrado: true,
             });
-         } else {
-            // ── Usuário ainda não tem conta ─────────────────────────────
-            try {
-               await emailService.enviarEmailConviteNovo(
-                  // ← era "EmailService" (undefined)
-                  email_convidado,
-                  userInfo.nome,
-                  nomeMesa,
-                  token,
-               );
-            } catch (emailError) {
-               console.error("Erro ao enviar email:", emailError);
-            }
-
-            res.status(201).json({
-               message:
-                  "Convite criado! Um email foi enviado para o convidado se cadastrar.",
-               conviteId,
-               token,
-               usuarioCadastrado: false,
-            });
          }
+
+         try {
+            await emailService.enviarEmailConviteNovo(
+               email_convidado,
+               nomeQuemConvida,
+               nomeMesa,
+               token,
+            );
+         } catch (emailError) {
+            console.error("Erro ao enviar email:", emailError);
+         }
+
+         return res.status(201).json({
+            message:
+               "Convite criado! Um email foi enviado para o convidado se cadastrar.",
+            conviteId,
+            token,
+            usuarioCadastrado: false,
+         });
       } catch (error) {
          console.error("Erro ao criar convite:", error);
          res.status(500).json({ error: "Erro ao criar convite" });
@@ -179,20 +182,23 @@ class ConviteController {
          const convite = await Convite.findByToken(token);
 
          if (!convite) {
-            return res.status(404).json({ error: "Convite não encontrado" });
+            return res.status(404).json({ error: "Convite nao encontrado" });
          }
-         if (convite.status !== "pendente") {
+
+         if (convite.status && convite.status !== "pendente") {
             return res
                .status(400)
-               .json({ error: "Este convite já foi processado" });
+               .json({ error: "Este convite ja foi processado" });
          }
-         if (new Date(convite.expira_em) < new Date()) {
+
+         if (convite.expira_em && new Date(convite.expira_em) < new Date()) {
             return res.status(400).json({ error: "Este convite expirou" });
          }
+
          if (convite.email_convidado !== userEmail) {
             return res
                .status(403)
-               .json({ error: "Este convite não foi enviado para você" });
+               .json({ error: "Este convite nao foi enviado para voce" });
          }
 
          const [mesasCompartilhadas] = await db.query(
@@ -200,10 +206,12 @@ class ConviteController {
             [userId],
          );
 
+         const totalCompartilhadas = mesasCompartilhadas?.[0]?.total || 0;
          const user = await User.findById(userId);
-         if (user.tipo_plano === "free" && mesasCompartilhadas[0].total >= 2) {
+
+         if (user?.tipo_plano === "free" && totalCompartilhadas >= 2) {
             return res.status(400).json({
-               error: "Você atingiu o limite de 2 mesas compartilhadas no plano gratuito",
+               error: "Voce atingiu o limite de 2 mesas compartilhadas no plano gratuito",
             });
          }
 
@@ -229,17 +237,19 @@ class ConviteController {
          const convite = await Convite.findByToken(token);
 
          if (!convite) {
-            return res.status(404).json({ error: "Convite não encontrado" });
+            return res.status(404).json({ error: "Convite nao encontrado" });
          }
-         if (convite.status !== "pendente") {
+
+         if (convite.status && convite.status !== "pendente") {
             return res
                .status(400)
-               .json({ error: "Este convite já foi processado" });
+               .json({ error: "Este convite ja foi processado" });
          }
+
          if (convite.email_convidado !== userEmail) {
             return res
                .status(403)
-               .json({ error: "Este convite não foi enviado para você" });
+               .json({ error: "Este convite nao foi enviado para voce" });
          }
 
          await Convite.recusar(convite.id, token);
