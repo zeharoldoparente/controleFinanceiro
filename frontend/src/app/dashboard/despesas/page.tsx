@@ -832,7 +832,7 @@ export default function DespesasPage() {
 
    return (
       <DashboardLayout>
-         <div className="space-y-4 md:space-y-6">
+         <div data-page="despesas" className="space-y-4 md:space-y-6">
             {/* Header */}
             <div data-help-id="despesas-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                <div>
