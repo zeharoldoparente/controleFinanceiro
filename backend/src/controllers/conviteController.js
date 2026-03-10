@@ -67,15 +67,26 @@ class ConviteController {
          const nomeMesa = mesa[0].nome;
 
          if (usuarioConvidado) {
+            let notificacaoCriada = false;
+            let emailEnviado = false;
             // ── Usuário já tem conta ────────────────────────────────────
-            await Notificacao.create(
-               usuarioConvidado.id,
-               "convite_mesa",
-               "Novo convite de mesa",
-               `${userInfo.nome} convidou você para participar da mesa "${nomeMesa}"`,
-               `/convites/${token}`,
-               { convite_id: conviteId, mesa_id, token },
-            );
+            // Convite ja criado: notificacao e email sao best effort.
+            try {
+               await Notificacao.create(
+                  usuarioConvidado.id,
+                  "convite_mesa",
+                  "Novo convite de mesa",
+                  `${userInfo.nome} convidou voce para participar da mesa "${nomeMesa}"`,
+                  `/convites/${token}`,
+                  { convite_id: conviteId, mesa_id, token },
+               );
+               notificacaoCriada = true;
+            } catch (notificacaoError) {
+               console.error(
+                  "Erro ao criar notificacao de convite:",
+                  notificacaoError,
+               );
+            }
 
             try {
                await emailService.enviarEmailConviteExistente(
@@ -85,13 +96,27 @@ class ConviteController {
                   usuarioConvidado.nome, // ← era "nomeConvidado" (undefined)
                   token,
                );
+               emailEnviado = true;
             } catch (emailError) {
                console.error("Erro ao enviar email:", emailError);
             }
 
+            let message =
+               "Convite enviado com sucesso para usuario cadastrado.";
+
+            if (notificacaoCriada && emailEnviado) {
+               message =
+                  "Convite enviado! O usuario recebera uma notificacao e um email.";
+            } else if (notificacaoCriada && !emailEnviado) {
+               message =
+                  "Convite enviado! O usuario recebera notificacao no app.";
+            } else if (!notificacaoCriada && emailEnviado) {
+               message =
+                  "Convite enviado! O usuario recebera o email, mas a notificacao no app nao foi criada.";
+            }
+
             res.status(201).json({
-               message:
-                  "Convite enviado! O usuário receberá uma notificação e um email.",
+               message,
                conviteId,
                usuarioCadastrado: true,
             });
@@ -118,7 +143,7 @@ class ConviteController {
             });
          }
       } catch (error) {
-         console.error(error);
+         console.error("Erro ao criar convite:", error);
          res.status(500).json({ error: "Erro ao criar convite" });
       }
    }
