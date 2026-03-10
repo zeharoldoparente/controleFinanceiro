@@ -65,11 +65,11 @@ class DespesaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id);
+            const cat = await Categoria.findById(categoria_id, userId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)
-                  .json({ error: "Categoria inválida ou inativa" });
+                  .json({ error: "Categoria invalida ou inativa" });
             if (cat.tipo !== "despesa")
                return res
                   .status(400)
@@ -205,6 +205,18 @@ class DespesaController {
                return res
                   .status(400)
                   .json({ error: "Tipo de pagamento inválido ou inativo" });
+         }
+
+         if (categoria_id) {
+            const cat = await Categoria.findById(categoria_id, userId);
+            if (!cat || !cat.ativa)
+               return res
+                  .status(400)
+                  .json({ error: "Categoria invalida ou inativa" });
+            if (cat.tipo !== "despesa")
+               return res
+                  .status(400)
+                  .json({ error: "Categoria deve ser do tipo 'despesa'" });
          }
 
          await Despesa.update(id, mesa_id, {
@@ -564,4 +576,3 @@ class DespesaController {
 }
 
 module.exports = DespesaController;
-

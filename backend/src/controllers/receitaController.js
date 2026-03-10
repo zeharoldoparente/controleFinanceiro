@@ -41,7 +41,7 @@ class ReceitaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id);
+            const cat = await Categoria.findById(categoria_id, userId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)
@@ -177,7 +177,7 @@ class ReceitaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id);
+            const cat = await Categoria.findById(categoria_id, userId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)
@@ -376,4 +376,3 @@ class ReceitaController {
 }
 
 module.exports = ReceitaController;
-

@@ -6,6 +6,9 @@ export interface Categoria {
    tipo: "receita" | "despesa";
    ativa: boolean;
    created_at?: string;
+   user_id?: number | null;
+   is_padrao?: boolean;
+   pertence_ao_usuario?: boolean;
 }
 
 const categoriaService = {

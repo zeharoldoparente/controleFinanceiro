@@ -99,7 +99,7 @@ export default function CategoriasPage() {
       } catch (error) {
          if (isApiError(error)) {
             setErro(
-               error.response?.data?.message || "Erro ao salvar categoria",
+               error.response?.data?.error || error.response?.data?.message || "Erro ao salvar categoria",
             );
          } else {
             setErro("Erro ao salvar categoria");
@@ -119,7 +119,7 @@ export default function CategoriasPage() {
 
          carregarCategorias();
          setTimeout(() => setSucesso(""), 3000);
-      } catch (error) {
+      } catch {
          setErro("Erro ao alterar status da categoria");
       }
    };
@@ -588,4 +588,3 @@ export default function CategoriasPage() {
       </DashboardLayout>
    );
 }
-

@@ -99,10 +99,14 @@ CREATE TABLE categorias (
   id INT PRIMARY KEY AUTO_INCREMENT,
   nome VARCHAR(255) NOT NULL,
   tipo ENUM('receita', 'despesa') NOT NULL,
+  user_id INT DEFAULT NULL COMMENT 'NULL = padrao global; preenchido = personalizada do usuario',
   ativa BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_categorias_user_id (user_id),
+  INDEX idx_categorias_nome_tipo_user (nome, tipo, user_id),
   INDEX idx_tipo (tipo),
   INDEX idx_ativa (ativa)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
