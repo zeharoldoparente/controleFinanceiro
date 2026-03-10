@@ -13,8 +13,9 @@ class Convite {
          return this._cachedColumns;
       }
 
-      const [rows] = await db.query("SHOW COLUMNS FROM convites");
-      const columns = new Set(rows.map((row) => row.Field));
+      // Evita depender de permissao de SHOW COLUMNS em ambientes gerenciados.
+      const [, fields] = await db.query("SELECT * FROM convites LIMIT 0");
+      const columns = new Set(fields.map((field) => field.name));
 
       this._cachedColumns = columns;
       this._cachedColumnsAt = now;

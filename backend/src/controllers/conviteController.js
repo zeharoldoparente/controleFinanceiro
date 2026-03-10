@@ -147,7 +147,8 @@ class ConviteController {
          });
       } catch (error) {
          console.error("Erro ao criar convite:", error);
-         res.status(500).json({ error: "Erro ao criar convite" });
+         const errorCode = error?.code ? ` (${error.code})` : "";
+         res.status(500).json({ error: `Erro ao criar convite${errorCode}` });
       }
    }
 
