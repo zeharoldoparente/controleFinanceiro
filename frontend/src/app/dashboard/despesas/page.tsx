@@ -1207,7 +1207,7 @@ export default function DespesasPage() {
                                     onChange={(e) =>
                                        setDescricao(e.target.value)
                                     }
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                     placeholder="Ex: Conta de luz"
                                     autoFocus
                                  />
@@ -1354,7 +1354,7 @@ export default function DespesasPage() {
                                        onChange={(e) =>
                                           setValorProvisionado(e.target.value)
                                        }
-                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                        placeholder="0,00"
                                     />
                                     {parcelas > 1 &&
@@ -1382,7 +1382,7 @@ export default function DespesasPage() {
                                        onChange={(e) =>
                                           setDataVencimento(e.target.value)
                                        }
-                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                     />
                                  </div>
                               </div>
@@ -1396,9 +1396,9 @@ export default function DespesasPage() {
                                     <select
                                        value={categoriaId}
                                        onChange={(e) =>
-                                          setCategoriaId(Number(e.target.value))
+                                          setCategoriaId(e.target.value ? Number(e.target.value) : "")
                                        }
-                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                     >
                                        <option value="">Sem categoria</option>
                                        {categorias.map((cat) => (
@@ -1415,13 +1415,19 @@ export default function DespesasPage() {
                                     <select
                                        value={tipoPagamentoId}
                                        onChange={(e) => {
-                                          const newId = Number(e.target.value);
+                                          const rawValue = e.target.value;
+                                          const newId = rawValue
+                                             ? Number(rawValue)
+                                             : "";
                                           setTipoPagamentoId(newId);
                                           setCartaoId("");
                                           // FIX: ao selecionar cartão crédito, força tipo variavel e limpa recorrente
-                                          const tp = tiposPagamento.find(
-                                             (t) => t.id === newId,
-                                          );
+                                          const tp =
+                                             typeof newId === "number"
+                                                ? tiposPagamento.find(
+                                                     (t) => t.id === newId,
+                                                  )
+                                                : undefined;
                                           const nome =
                                              tp?.nome?.toLowerCase() ?? "";
                                           if (
@@ -1432,7 +1438,7 @@ export default function DespesasPage() {
                                              setRecorrente(false);
                                           }
                                        }}
-                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                     >
                                        <option value="">Selecione...</option>
                                        {tiposPagamento.map((tp) => (
@@ -1528,7 +1534,7 @@ export default function DespesasPage() {
                                              setParcelas(v);
                                              if (v > 1) setRecorrente(false);
                                           }}
-                                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-red-500"
+                                          className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-center text-gray-900 focus:ring-2 focus:ring-red-500"
                                        />
                                        <span className="text-sm text-gray-500">
                                           vez{parcelas > 1 ? "es" : ""}
