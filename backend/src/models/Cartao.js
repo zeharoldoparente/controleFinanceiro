@@ -166,7 +166,7 @@ class Cartao {
          ? "c.tipo AS tipo"
          : schemaInfo.hasTipoPagamentoId
            ? `CASE
-               WHEN LOWER(tp.nome) LIKE '%debito%' THEN 'debito'
+               WHEN LOWER(tp.nome) LIKE '%debito%' OR LOWER(tp.nome) LIKE '%débito%' THEN 'debito'
                ELSE 'credito'
              END AS tipo`
            : "'credito' AS tipo";
@@ -229,7 +229,7 @@ class Cartao {
          ? "c.tipo AS tipo"
          : schemaInfo.hasTipoPagamentoId
            ? `CASE
-               WHEN LOWER(tp.nome) LIKE '%debito%' THEN 'debito'
+               WHEN LOWER(tp.nome) LIKE '%debito%' OR LOWER(tp.nome) LIKE '%débito%' THEN 'debito'
                ELSE 'credito'
              END AS tipo`
            : "'credito' AS tipo";
