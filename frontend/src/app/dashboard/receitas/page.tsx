@@ -116,6 +116,7 @@ export default function ReceitasPage() {
    // Modal excluir
    const [modalExcluir, setModalExcluir] = useState<Receita | null>(null);
    const [loadingExcluir, setLoadingExcluir] = useState(false);
+   const [escopoExclusao, setEscopoExclusao] = useState<"apenas" | "posteriores">("apenas");
 
    // Campos formulário
    const [descricao, setDescricao] = useState("");
@@ -375,13 +376,45 @@ export default function ReceitasPage() {
 
    // ─── Excluir ──────────────────────────────────────────────────────────────
 
+   const podeExcluirPosterioresReceita = (receita: Receita): boolean => {
+      const ehRecorrente =
+         !!receita.recorrente || receita.origem_recorrente_id != null;
+      const ehParceladaComPosteriores =
+         receita.parcelas > 1 &&
+         receita.parcela_atual < receita.parcelas &&
+         !!receita.grupo_parcela;
+
+      return ehRecorrente || ehParceladaComPosteriores;
+   };
+
+   const abrirModalExcluir = (receita: Receita) => {
+      setEscopoExclusao("apenas");
+      setModalExcluir(receita);
+   };
+
    const confirmarExclusao = async () => {
       if (!modalExcluir) return;
+
+      const receita = modalExcluir;
+      const escopoSelecionado = podeExcluirPosterioresReceita(receita)
+         ? escopoExclusao
+         : "apenas";
+
       setLoadingExcluir(true);
       try {
-         await receitaService.inativar(modalExcluir.id, modalExcluir.mesa_id);
-         setSucesso("Receita excluída!");
+         await receitaService.inativar(receita.id, receita.mesa_id, {
+            escopo: escopoSelecionado,
+            mes: mesSelecionado,
+         });
+
+         if (escopoSelecionado === "posteriores") {
+            setSucesso("Receita atual e posteriores excluidas com sucesso!");
+         } else {
+            setSucesso("Receita excluida!");
+         }
+
          setModalExcluir(null);
+         setEscopoExclusao("apenas");
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
       } catch {
@@ -762,7 +795,7 @@ export default function ReceitasPage() {
                                     )}
                                     <button
                                        title="Excluir"
-                                       onClick={() => setModalExcluir(receita)}
+                                       onClick={() => abrirModalExcluir(receita)}
                                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                                     >
                                        <svg
@@ -957,9 +990,7 @@ export default function ReceitasPage() {
                                              )}
                                              <button
                                                 title="Excluir"
-                                                onClick={() =>
-                                                   setModalExcluir(receita)
-                                                }
+                                                onClick={() => abrirModalExcluir(receita)}
                                                 className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                                              >
                                                 <svg
@@ -1368,11 +1399,48 @@ export default function ReceitasPage() {
                         {modalExcluir.descricao}
                      </p>
                      <p className="text-xs text-gray-400 mb-5">
-                        Esta ação não pode ser desfeita.
+                        Esta acao nao pode ser desfeita.
                      </p>
+                     {podeExcluirPosterioresReceita(modalExcluir) && (
+                        <div className="mb-5 text-left">
+                           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                              Como deseja excluir?
+                           </p>
+                           <div className="grid grid-cols-2 gap-2">
+                              <button
+                                 type="button"
+                                 onClick={() => setEscopoExclusao("apenas")}
+                                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                                    escopoExclusao === "apenas"
+                                       ? "bg-gray-900 text-white"
+                                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                 }`}
+                              >
+                                 Apenas esta
+                              </button>
+                              <button
+                                 type="button"
+                                 onClick={() => setEscopoExclusao("posteriores")}
+                                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                                    escopoExclusao === "posteriores"
+                                       ? "bg-red-600 text-white"
+                                       : "bg-red-50 text-red-700 hover:bg-red-100"
+                                 }`}
+                              >
+                                 Esta e posteriores
+                              </button>
+                           </div>
+                           <p className="text-[11px] text-gray-400 mt-2">
+                              {modalExcluir.recorrente ||
+                              modalExcluir.origem_recorrente_id != null
+                                 ? "Para recorrentes, remove a ocorrencia do mes selecionado em diante."
+                                 : "Para parceladas, remove da parcela atual em diante."}
+                           </p>
+                        </div>
+                     )}
                      <div className="flex gap-3">
                         <button
-                           onClick={() => setModalExcluir(null)}
+                           onClick={() => { setModalExcluir(null); setEscopoExclusao("apenas"); }}
                            className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
                         >
                            Cancelar
@@ -1382,7 +1450,7 @@ export default function ReceitasPage() {
                            disabled={loadingExcluir}
                            className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-700 transition-colors disabled:opacity-50"
                         >
-                           {loadingExcluir ? "Excluindo..." : "Excluir"}
+                           {loadingExcluir ? "Excluindo..." : escopoExclusao === "posteriores" && podeExcluirPosterioresReceita(modalExcluir) ? "Excluir posteriores" : "Excluir"}
                         </button>
                      </div>
                   </div>
@@ -1392,4 +1460,3 @@ export default function ReceitasPage() {
       </DashboardLayout>
    );
 }
-

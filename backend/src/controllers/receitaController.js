@@ -296,24 +296,91 @@ class ReceitaController {
    static async inativar(req, res) {
       try {
          const { id } = req.params;
-         const { mesa_id } = req.query;
+         const { mesa_id, escopo, mes } = req.query;
          const userId = req.userId;
 
          if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
 
          const mesa = await Mesa.findById(mesa_id, userId);
          if (!mesa)
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
 
          const receita = await Receita.findById(id, mesa_id);
          if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+            return res.status(404).json({ error: "Receita nao encontrada" });
+
+         const escopoExclusao = escopo === "posteriores" ? "posteriores" : "apenas";
+
+         if (
+            escopoExclusao === "posteriores" &&
+            receita.parcelas > 1 &&
+            receita.grupo_parcela
+         ) {
+            await Receita.inativarGrupoApartirParcela(
+               receita.grupo_parcela,
+               mesa_id,
+               receita.parcela_atual,
+            );
+            return res.json({
+               message: "Receita atual e posteriores excluidas com sucesso!",
+            });
+         }
+
+         const ehRecorrente = !!receita.recorrente || receita.origem_recorrente_id != null;
+
+         if (escopoExclusao === "posteriores" && ehRecorrente) {
+            const hasOrigemRecorrente =
+               await Receita.hasOrigemRecorrenteColumn();
+
+            if (!hasOrigemRecorrente) {
+               await Receita.inativar(id, mesa_id);
+               return res.json({
+                  message: "Receita recorrente excluida com sucesso!",
+               });
+            }
+            const origemRecorrenteId = receita.origem_recorrente_id ?? receita.id;
+            const mesValido = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes || ""));
+            const mesBase = mesValido
+               ? String(mes)
+               : String(
+                    receita.mes_referencia ||
+                       String(receita.data_recebimento).substring(0, 7),
+                 );
+
+            try {
+               await Receita.cancelarRecorrencia(
+                  origemRecorrenteId,
+                  mesa_id,
+                  `${mesBase}-01`,
+               );
+               await Receita.inativarConfirmacoesRecorrentesApartirMes(
+                  origemRecorrenteId,
+                  mesa_id,
+                  mesBase,
+               );
+
+               return res.json({
+                  message: "Recorrencia cancelada a partir do mes selecionado!",
+               });
+            } catch (error) {
+               if (error.message === "COLUNA_DATA_CANCELAMENTO_AUSENTE") {
+                  await Receita.inativarRecorrenciaCompleta(
+                     origemRecorrenteId,
+                     mesa_id,
+                  );
+                  return res.json({
+                     message: "Receita recorrente excluida com sucesso!",
+                  });
+               }
+               throw error;
+            }
+         }
 
          await Receita.inativar(id, mesa_id);
-         res.json({ message: "Receita excluída com sucesso!" });
+         res.json({ message: "Receita excluida com sucesso!" });
       } catch (error) {
          console.error(error);
          res.status(500).json({ error: "Erro ao excluir receita" });

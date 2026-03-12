@@ -71,23 +71,74 @@ class Receita {
     * 2. Receita RECORRENTE ativa para o mês, SEM confirmação já criada
     * 3. CONFIRMAÇÃO de recorrente para esse mês específico
     */
+   static async hasOrigemRecorrenteColumn() {
+      try {
+         const [cols] = await db.query(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'receitas' AND COLUMN_NAME = 'origem_recorrente_id'",
+         );
+         return cols.length > 0;
+      } catch (_) {
+         return false;
+      }
+   }
+   static async hasDataCancelamentoColumn() {
+      try {
+         const [cols] = await db.query(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'receitas' AND COLUMN_NAME = 'data_cancelamento'",
+         );
+         return cols.length > 0;
+      } catch (_) {
+         return false;
+      }
+   }
+
    static async findByMesaIdFiltrado(mesaId, mes) {
       const primeiroDia = `${mes}-01`;
 
       // Verifica se as colunas novas existem (compatibilidade com BDs sem migration)
-      let hasNewColumns = false;
-      try {
-         const [cols] = await db.query(
-            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'receitas'
-               AND COLUMN_NAME = 'origem_recorrente_id'`,
+      const hasNewColumns = await Receita.hasOrigemRecorrenteColumn();
+
+      const hasDataCancelamento = hasNewColumns
+         ? await Receita.hasDataCancelamentoColumn()
+         : false;
+
+      if (hasNewColumns && hasDataCancelamento) {
+         const [rows] = await db.query(
+            `SELECT
+                r.*,
+                c.nome  AS categoria_nome,
+                tp.nome AS tipo_pagamento_nome
+             FROM receitas r
+             LEFT JOIN categorias      c  ON r.categoria_id      = c.id
+             LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
+             WHERE r.mesa_id = ?
+               AND r.ativa   = TRUE
+               AND (
+                  (r.recorrente = FALSE AND r.origem_recorrente_id IS NULL
+                   AND DATE_FORMAT(r.data_recebimento, '%Y-%m') = ?)
+                  OR
+                  (r.recorrente = TRUE AND r.data_recebimento <= LAST_DAY(?)
+                   AND (
+                      r.data_cancelamento IS NULL
+                      OR DATE_FORMAT(r.data_cancelamento, '%Y-%m') > ?
+                   )
+                   AND NOT EXISTS (
+                      SELECT 1 FROM receitas cf
+                      WHERE cf.origem_recorrente_id = r.id
+                        AND cf.mes_referencia       = ?
+                        AND cf.ativa                = TRUE
+                   ))
+                  OR
+                  (r.origem_recorrente_id IS NOT NULL AND r.mes_referencia = ?)
+               )
+             ORDER BY r.data_recebimento ASC, r.id ASC`,
+            [mesaId, mes, primeiroDia, mes, mes, mes],
          );
-         hasNewColumns = cols.length > 0;
-      } catch (_) {}
+         return rows;
+      }
 
       if (hasNewColumns) {
-         // Query completa com suporte a confirmações de recorrentes
+         // Query completa com suporte a confirmacoes de recorrentes
          const [rows] = await db.query(
             `SELECT
                 r.*,
@@ -116,38 +167,30 @@ class Receita {
             [mesaId, mes, primeiroDia, mes, mes],
          );
          return rows;
-      } else {
-         // Query compatível com schema original (sem colunas de confirmação)
-         const [rows] = await db.query(
-            `SELECT
-                r.*,
-                c.nome  AS categoria_nome,
-                tp.nome AS tipo_pagamento_nome
-             FROM receitas r
-             LEFT JOIN categorias      c  ON r.categoria_id      = c.id
-             LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
-             WHERE r.mesa_id = ?
-               AND r.ativa   = TRUE
-               AND (
-                  (r.recorrente = FALSE AND DATE_FORMAT(r.data_recebimento, '%Y-%m') = ?)
-                  OR
-                  (r.recorrente = TRUE AND r.data_recebimento <= LAST_DAY(?))
-               )
-             ORDER BY r.data_recebimento ASC, r.id ASC`,
-            [mesaId, mes, primeiroDia],
-         );
-         return rows;
       }
+
+      // Query compativel com schema original (sem colunas de confirmacao)
+      const [rows] = await db.query(
+         `SELECT
+             r.*,
+             c.nome  AS categoria_nome,
+             tp.nome AS tipo_pagamento_nome
+          FROM receitas r
+          LEFT JOIN categorias      c  ON r.categoria_id      = c.id
+          LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
+          WHERE r.mesa_id = ?
+            AND r.ativa   = TRUE
+            AND (
+               (r.recorrente = FALSE AND DATE_FORMAT(r.data_recebimento, '%Y-%m') = ?)
+               OR
+               (r.recorrente = TRUE AND r.data_recebimento <= LAST_DAY(?))
+            )
+          ORDER BY r.data_recebimento ASC, r.id ASC`,
+         [mesaId, mes, primeiroDia],
+      );
+      return rows;
    }
 
-   // ─── CONFIRMAR ────────────────────────────────────────────────────────────
-
-   /**
-    * Confirma o recebimento de uma receita.
-    *
-    * Normal:      UPDATE status='recebida', valor_real, data_confirmacao
-    * Recorrente:  INSERT registro filho (confirmação do mês) com status='recebida'
-    */
    static async confirmar(id, mesaId, valorReal, mes) {
       const receita = await Receita.findById(id, mesaId);
       if (!receita) throw new Error("Receita não encontrada");
@@ -281,6 +324,56 @@ class Receita {
 
    // ─── SOFT DELETE ─────────────────────────────────────────────────────────
 
+   static async cancelarRecorrencia(id, mesaId, dataCancelamento) {
+      const hasDataCancelamento = await Receita.hasDataCancelamentoColumn();
+      if (!hasDataCancelamento) {
+         throw new Error("COLUNA_DATA_CANCELAMENTO_AUSENTE");
+      }
+
+      await db.query(
+         `UPDATE receitas
+          SET data_cancelamento = ?
+          WHERE id = ? AND mesa_id = ? AND recorrente = TRUE`,
+         [dataCancelamento, id, mesaId],
+      );
+   }
+
+   static async inativarGrupoApartirParcela(grupoParcela, mesaId, parcelaAtual) {
+      await db.query(
+         `UPDATE receitas
+          SET ativa = FALSE
+          WHERE grupo_parcela = ?
+            AND mesa_id = ?
+            AND parcela_atual >= ?`,
+         [grupoParcela, mesaId, parcelaAtual],
+      );
+   }
+
+   static async inativarConfirmacoesRecorrentesApartirMes(
+      origemRecorrenteId,
+      mesaId,
+      mesReferencia,
+   ) {
+      await db.query(
+         `UPDATE receitas
+          SET ativa = FALSE
+          WHERE origem_recorrente_id = ?
+            AND mesa_id = ?
+            AND mes_referencia IS NOT NULL
+            AND mes_referencia >= ?`,
+         [origemRecorrenteId, mesaId, mesReferencia],
+      );
+   }
+
+   static async inativarRecorrenciaCompleta(origemRecorrenteId, mesaId) {
+      await db.query(
+         `UPDATE receitas
+          SET ativa = FALSE
+          WHERE mesa_id = ?
+            AND (id = ? OR origem_recorrente_id = ?)`,
+         [mesaId, origemRecorrenteId, origemRecorrenteId],
+      );
+   }
    static async inativar(id, mesaId) {
       await db.query(
          "UPDATE receitas SET ativa = FALSE WHERE id = ? AND mesa_id = ?",

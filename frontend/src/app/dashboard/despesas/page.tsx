@@ -59,6 +59,7 @@ function hoje(): string {
 type StatusDespesa = "paga" | "a_vencer" | "vencida";
 type FiltroStatus = "todas" | StatusDespesa;
 type FiltroTipo = "todas" | TipoDespesa | "cartao";
+type EscopoExclusao = "apenas" | "posteriores";
 
 function getStatus(d: Despesa): StatusDespesa {
    if (d.paga) return "paga";
@@ -148,6 +149,7 @@ export default function DespesasPage() {
 
    const [modalExcluir, setModalExcluir] = useState<Despesa | null>(null);
    const [loadingExcluir, setLoadingExcluir] = useState(false);
+   const [escopoExclusao, setEscopoExclusao] = useState<EscopoExclusao>("apenas");
 
    const [modalBloqueioExclusao, setModalBloqueioExclusao] = useState(false);
 
@@ -445,21 +447,45 @@ export default function DespesasPage() {
       }
    };
 
+   const podeExcluirPosterioresDespesa = (despesa: Despesa): boolean => {
+      const ehRecorrente = !!despesa.recorrente;
+      const ehParceladaComPosteriores =
+         despesa.parcelas > 1 && despesa.parcela_atual < despesa.parcelas;
+      return ehRecorrente || ehParceladaComPosteriores;
+   };
+
    const excluirDespesa = async (despesa: Despesa) => {
       if (despesa.paga) {
          setModalBloqueioExclusao(true);
          return;
       }
+      setEscopoExclusao("apenas");
       setModalExcluir(despesa);
    };
 
    const confirmarExclusao = async () => {
       if (!modalExcluir) return;
+
+      const despesa = modalExcluir;
+      const escopoSelecionado = podeExcluirPosterioresDespesa(despesa)
+         ? escopoExclusao
+         : "apenas";
+
       setLoadingExcluir(true);
       try {
-         await despesaService.inativar(modalExcluir.id, modalExcluir.mesa_id);
-         setSucesso("Despesa excluída com sucesso!");
+         await despesaService.inativar(despesa.id, despesa.mesa_id, {
+            escopo: escopoSelecionado,
+            mes: mesSelecionado,
+         });
+
+         if (escopoSelecionado === "posteriores") {
+            setSucesso("Despesa atual e posteriores excluidas com sucesso!");
+         } else {
+            setSucesso("Despesa excluida com sucesso!");
+         }
+
          setModalExcluir(null);
+         setEscopoExclusao("apenas");
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
       } catch {
@@ -1904,8 +1930,7 @@ export default function DespesasPage() {
                         Fatura {modalDesfazerFatura.cartao_nome}
                      </p>
                      <p className="text-xs text-gray-400 mb-5">
-                        Todos os lançamentos vinculados voltarão ao status de
-                        não pagos.
+                        Todos os lancamentos vinculados voltarao ao status de nao pagos.
                      </p>
                      <div className="flex gap-3">
                         <button
@@ -1956,7 +1981,7 @@ export default function DespesasPage() {
                         {modalDesfazer.descricao}
                      </p>
                      <p className="text-xs text-gray-400 mb-5">
-                        O valor real e comprovante serão removidos.
+                        O valor real e comprovante serao removidos.
                      </p>
                      <div className="flex gap-3">
                         <button
@@ -2012,8 +2037,7 @@ export default function DespesasPage() {
                            mesSelecionado}
                      </p>
                      <p className="text-xs text-gray-400 mb-5">
-                        Os meses anteriores não são afetados. Você pode reativar
-                        a qualquer momento.
+                        Os meses anteriores nao sao afetados. Voce pode reativar a qualquer momento.
                      </p>
                      <div className="flex gap-3">
                         <button
@@ -2068,9 +2092,9 @@ export default function DespesasPage() {
                         .
                      </p>
                      <p className="text-xs text-gray-400 mb-5">
-                        Primeiro use o botão{" "}
+                        Primeiro use o botao{" "}
                         <span className="font-medium text-amber-600">
-                           ↩ Desfazer pagamento
+                           Desfazer pagamento
                         </span>
                         .
                      </p>
@@ -2112,11 +2136,47 @@ export default function DespesasPage() {
                         {modalExcluir.descricao}
                      </p>
                      <p className="text-xs text-gray-400 mb-5">
-                        Esta ação não pode ser desfeita.
+                        Esta acao nao pode ser desfeita.
                      </p>
+                     {podeExcluirPosterioresDespesa(modalExcluir) && (
+                        <div className="mb-5 text-left">
+                           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                              Como deseja excluir?
+                           </p>
+                           <div className="grid grid-cols-2 gap-2">
+                              <button
+                                 type="button"
+                                 onClick={() => setEscopoExclusao("apenas")}
+                                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                                    escopoExclusao === "apenas"
+                                       ? "bg-gray-900 text-white"
+                                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                 }`}
+                              >
+                                 Apenas esta
+                              </button>
+                              <button
+                                 type="button"
+                                 onClick={() => setEscopoExclusao("posteriores")}
+                                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                                    escopoExclusao === "posteriores"
+                                       ? "bg-red-600 text-white"
+                                       : "bg-red-50 text-red-700 hover:bg-red-100"
+                                 }`}
+                              >
+                                 Esta e posteriores
+                              </button>
+                           </div>
+                           <p className="text-[11px] text-gray-400 mt-2">
+                              {modalExcluir.recorrente
+                                 ? "Para recorrentes, remove a ocorrencia do mes selecionado em diante."
+                                 : "Para parceladas, remove da parcela atual em diante."}
+                           </p>
+                        </div>
+                     )}
                      <div className="flex gap-3">
                         <button
-                           onClick={() => setModalExcluir(null)}
+                           onClick={() => { setModalExcluir(null); setEscopoExclusao("apenas"); }}
                            className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
                         >
                            Cancelar
@@ -2126,7 +2186,7 @@ export default function DespesasPage() {
                            disabled={loadingExcluir}
                            className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-700 transition-colors disabled:opacity-50"
                         >
-                           {loadingExcluir ? "Excluindo..." : "Excluir"}
+                           {loadingExcluir ? "Excluindo..." : escopoExclusao === "posteriores" && podeExcluirPosterioresDespesa(modalExcluir) ? "Excluir posteriores" : "Excluir"}
                         </button>
                      </div>
                   </div>
@@ -3204,4 +3264,3 @@ function ModalPagarDespesa({
       </div>
    );
 }
-

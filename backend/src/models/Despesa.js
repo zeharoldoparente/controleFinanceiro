@@ -305,6 +305,32 @@ class Despesa {
       }
    }
 
+   static async inativarGrupoApartirParcela(parcelaGrupoId, mesaId, parcelaAtual) {
+      const [rows] = await db.query(
+         `SELECT DISTINCT fatura_id
+          FROM despesas
+          WHERE parcela_grupo_id = ?
+            AND mesa_id = ?
+            AND parcela_atual >= ?
+            AND ativa = TRUE
+            AND fatura_id IS NOT NULL`,
+         [parcelaGrupoId, mesaId, parcelaAtual],
+      );
+
+      await db.query(
+         `UPDATE despesas
+          SET ativa = FALSE
+          WHERE parcela_grupo_id = ?
+            AND mesa_id = ?
+            AND parcela_atual >= ?`,
+         [parcelaGrupoId, mesaId, parcelaAtual],
+      );
+
+      for (const row of rows) {
+         await Fatura.recalcularTotal(row.fatura_id);
+      }
+   }
+
    static async reativar(id, mesaId) {
       await db.query(
          "UPDATE despesas SET ativa = TRUE WHERE id = ? AND mesa_id = ?",

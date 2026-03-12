@@ -93,8 +93,17 @@ const receitaService = {
       return response.data;
    },
 
-   inativar: async (id: number, mesaId: number) => {
-      const response = await api.delete(`/receitas/${id}?mesa_id=${mesaId}`);
+   inativar: async (
+      id: number,
+      mesaId: number,
+      options?: { escopo?: "apenas" | "posteriores"; mes?: string },
+   ) => {
+      const params = new URLSearchParams();
+      params.append("mesa_id", mesaId.toString());
+      if (options?.escopo) params.append("escopo", options.escopo);
+      if (options?.mes) params.append("mes", options.mes);
+
+      const response = await api.delete(`/receitas/${id}?${params.toString()}`);
       return response.data;
    },
 

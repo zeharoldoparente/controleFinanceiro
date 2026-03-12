@@ -379,24 +379,53 @@ class DespesaController {
    static async inativar(req, res) {
       try {
          const { id } = req.params;
-         const { mesa_id } = req.query;
+         const { mesa_id, escopo, mes } = req.query;
          const userId = req.userId;
 
          if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
 
          const mesa = await Mesa.findById(mesa_id, userId);
          if (!mesa)
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
 
          const despesa = await Despesa.findById(id, mesa_id);
          if (!despesa)
-            return res.status(404).json({ error: "Despesa não encontrada" });
+            return res.status(404).json({ error: "Despesa nao encontrada" });
+
+         const escopoExclusao = escopo === "posteriores" ? "posteriores" : "apenas";
+
+         if (
+            escopoExclusao === "posteriores" &&
+            despesa.parcelas > 1 &&
+            despesa.parcela_grupo_id
+         ) {
+            await Despesa.inativarGrupoApartirParcela(
+               despesa.parcela_grupo_id,
+               mesa_id,
+               despesa.parcela_atual,
+            );
+            return res.json({
+               message: "Despesa atual e posteriores excluidas com sucesso!",
+            });
+         }
+
+         if (escopoExclusao === "posteriores" && despesa.recorrente) {
+            const mesValido = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes || ""));
+            const mesBase = mesValido
+               ? String(mes)
+               : String(despesa.data_vencimento).substring(0, 7);
+
+            await Despesa.cancelarRecorrencia(id, mesa_id, `${mesBase}-01`);
+            return res.json({
+               message: "Recorrencia cancelada a partir do mes selecionado!",
+            });
+         }
 
          await Despesa.inativar(id, mesa_id);
-         res.json({ message: "Despesa excluída com sucesso!" });
+         res.json({ message: "Despesa excluida com sucesso!" });
       } catch (error) {
          console.error(error);
          res.status(500).json({ error: "Erro ao excluir despesa" });

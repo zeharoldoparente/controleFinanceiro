@@ -126,8 +126,16 @@ const despesaService = {
       });
    },
 
-   async inativar(id: number, mesaId: number): Promise<void> {
-      await api.delete(`/despesas/${id}`, { params: { mesa_id: mesaId } });
+   async inativar(
+      id: number,
+      mesaId: number,
+      options?: { escopo?: "apenas" | "posteriores"; mes?: string },
+   ): Promise<void> {
+      const params: Record<string, string> = { mesa_id: String(mesaId) };
+      if (options?.escopo) params.escopo = options.escopo;
+      if (options?.mes) params.mes = options.mes;
+
+      await api.delete(`/despesas/${id}`, { params });
    },
 
    async buscarParcelas(
