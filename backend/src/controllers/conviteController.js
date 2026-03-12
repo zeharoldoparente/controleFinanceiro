@@ -4,6 +4,15 @@ const User = require("../models/User");
 const db = require("../config/database");
 const emailService = require("../services/emailService");
 
+function normalizeEmail(email) {
+   return String(email || "").trim().toLowerCase();
+}
+
+function isConviteTokenValido(token) {
+   const value = String(token || "").trim();
+   return /^[a-f0-9]{64}$/i.test(value) || /^id-\d+$/.test(value);
+}
+
 class ConviteController {
    static async marcarNotificacaoConviteProcessada(userId, token, mensagem) {
       const link = `/convites/${token}`;
@@ -47,7 +56,14 @@ class ConviteController {
                .json({ error: "Mesa e email do convidado sao obrigatorios" });
          }
 
-         if (email_convidado === userEmail) {
+         const emailConvidadoNormalizado = normalizeEmail(email_convidado);
+         const userEmailNormalizado = normalizeEmail(userEmail);
+
+         if (!emailConvidadoNormalizado) {
+            return res.status(400).json({ error: "Email do convidado invalido" });
+         }
+
+         if (emailConvidadoNormalizado === userEmailNormalizado) {
             return res
                .status(400)
                .json({ error: "Voce nao pode convidar a si mesmo" });
@@ -68,7 +84,7 @@ class ConviteController {
 
          const conviteExistente = await Convite.verificarConviteExistente(
             mesa_id,
-            email_convidado,
+            emailConvidadoNormalizado,
          );
 
          if (conviteExistente) {
@@ -81,7 +97,7 @@ class ConviteController {
             `SELECT mu.id FROM mesa_usuarios mu
              INNER JOIN users u ON mu.user_id = u.id
              WHERE mu.mesa_id = ? AND u.email = ?`,
-            [mesa_id, email_convidado],
+            [mesa_id, emailConvidadoNormalizado],
          );
 
          if (jaParticipa.length > 0) {
@@ -92,11 +108,11 @@ class ConviteController {
 
          const { conviteId, token } = await Convite.create(
             mesa_id,
-            email_convidado,
+            emailConvidadoNormalizado,
             userId,
          );
 
-         const usuarioConvidado = await User.findByEmail(email_convidado);
+         const usuarioConvidado = await User.findByEmail(emailConvidadoNormalizado);
          const userInfo = await User.findById(userId);
          const nomeMesa = mesa.nome;
          const nomeQuemConvida = userInfo?.nome || "Um usuario";
@@ -105,7 +121,6 @@ class ConviteController {
             let notificacaoCriada = false;
             let emailEnviado = false;
 
-            // O convite ja foi criado. Notificacao e email sao best effort.
             try {
                await Notificacao.create(
                   usuarioConvidado.id,
@@ -125,7 +140,7 @@ class ConviteController {
 
             try {
                await emailService.enviarEmailConviteExistente(
-                  email_convidado,
+                  emailConvidadoNormalizado,
                   nomeQuemConvida,
                   nomeMesa,
                   usuarioConvidado.nome,
@@ -159,7 +174,7 @@ class ConviteController {
 
          try {
             await emailService.enviarEmailConviteNovo(
-               email_convidado,
+               emailConvidadoNormalizado,
                nomeQuemConvida,
                nomeMesa,
                token,
@@ -172,7 +187,6 @@ class ConviteController {
             message:
                "Convite criado! Um email foi enviado para o convidado se cadastrar.",
             conviteId,
-            token,
             usuarioCadastrado: false,
          });
       } catch (error) {
@@ -193,7 +207,9 @@ class ConviteController {
    static async listPendentes(req, res) {
       try {
          const userEmail = req.userEmail;
-         const convites = await Convite.findPendentesByEmail(userEmail);
+         const convites = await Convite.findPendentesByEmail(
+            normalizeEmail(userEmail),
+         );
          res.json({ convites });
       } catch (error) {
          console.error(error);
@@ -218,6 +234,10 @@ class ConviteController {
          const userId = req.userId;
          const userEmail = req.userEmail;
 
+         if (!isConviteTokenValido(token)) {
+            return res.status(400).json({ error: "Token de convite invalido" });
+         }
+
          const convite = await Convite.findByToken(token);
 
          if (!convite) {
@@ -234,7 +254,10 @@ class ConviteController {
             return res.status(400).json({ error: "Este convite expirou" });
          }
 
-         if (convite.email_convidado !== userEmail) {
+         if (
+            normalizeEmail(convite.email_convidado) !==
+            normalizeEmail(userEmail)
+         ) {
             return res
                .status(403)
                .json({ error: "Este convite nao foi enviado para voce" });
@@ -255,11 +278,19 @@ class ConviteController {
          }
 
          await db.query(
-            `INSERT INTO mesa_usuarios (mesa_id, user_id, papel) VALUES (?, ?, 'convidado')`,
+            `INSERT INTO mesa_usuarios (mesa_id, user_id, papel)
+             VALUES (?, ?, 'convidado')
+             ON DUPLICATE KEY UPDATE papel = VALUES(papel)`,
             [convite.mesa_id, userId],
          );
 
-         await Convite.aceitar(convite.id, token);
+         const conviteAtualizado = await Convite.aceitar(convite.id, token);
+         if (!conviteAtualizado) {
+            return res
+               .status(409)
+               .json({ error: "Este convite ja foi processado" });
+         }
+
          await ConviteController.marcarNotificacaoConviteProcessada(
             userId,
             token,
@@ -282,6 +313,10 @@ class ConviteController {
          const userEmail = req.userEmail;
          const userId = req.userId;
 
+         if (!isConviteTokenValido(token)) {
+            return res.status(400).json({ error: "Token de convite invalido" });
+         }
+
          const convite = await Convite.findByToken(token);
 
          if (!convite) {
@@ -294,13 +329,22 @@ class ConviteController {
                .json({ error: "Este convite ja foi processado" });
          }
 
-         if (convite.email_convidado !== userEmail) {
+         if (
+            normalizeEmail(convite.email_convidado) !==
+            normalizeEmail(userEmail)
+         ) {
             return res
                .status(403)
                .json({ error: "Este convite nao foi enviado para voce" });
          }
 
-         await Convite.recusar(convite.id, token);
+         const conviteAtualizado = await Convite.recusar(convite.id, token);
+         if (!conviteAtualizado) {
+            return res
+               .status(409)
+               .json({ error: "Este convite ja foi processado" });
+         }
+
          await ConviteController.marcarNotificacaoConviteProcessada(
             userId,
             token,
@@ -316,4 +360,3 @@ class ConviteController {
 }
 
 module.exports = ConviteController;
-

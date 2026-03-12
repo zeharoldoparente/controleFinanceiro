@@ -137,7 +137,7 @@ class ContaController {
 
          const hash = await bcrypt.hash(nova_senha, 10);
          await db.query(
-            "UPDATE users SET password = ?, reset_token = NULL, reset_token_expira = NULL WHERE id = ?",
+            "UPDATE users SET senha = ?, reset_token = NULL, reset_token_expira = NULL WHERE id = ?",
             [hash, rows[0].id],
          );
          res.json({ message: "Senha alterada com sucesso!" });

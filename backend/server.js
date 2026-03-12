@@ -4,8 +4,13 @@ require("dotenv").config();
 const db = require("./src/config/database");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger");
+const securityHeadersMiddleware = require("./src/middlewares/securityHeadersMiddleware");
+const { createRateLimiter } = require("./src/middlewares/rateLimitMiddleware");
 
 const app = express();
+
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 
 function normalizeOrigin(origin) {
    return typeof origin === "string" ? origin.replace(/\/+$/, "") : origin;
@@ -52,6 +57,35 @@ const corsOptions = {
    credentials: true,
 };
 
+const apiLimiter = createRateLimiter({
+   windowMs: 60 * 1000,
+   max: 240,
+   message: "Muitas requisicoes para a API. Aguarde alguns segundos.",
+});
+
+const authLimiter = createRateLimiter({
+   windowMs: 15 * 60 * 1000,
+   max: 20,
+   keyGenerator: (req) => `${req.ip}:${req.path}`,
+   message:
+      "Muitas tentativas de autenticacao. Aguarde alguns minutos para tentar novamente.",
+});
+
+const financeLimiter = createRateLimiter({
+   windowMs: 60 * 1000,
+   max: 180,
+   message:
+      "Volume alto de operacoes financeiras detectado. Tente novamente em instantes.",
+});
+
+const conviteLimiter = createRateLimiter({
+   windowMs: 10 * 60 * 1000,
+   max: 60,
+   keyGenerator: (req) => req.ip,
+   message: "Muitas tentativas em convites. Aguarde e tente novamente.",
+});
+
+app.use(securityHeadersMiddleware);
 app.use(cors(corsOptions));
 
 app.use(express.json({ limit: "10mb" }));
@@ -89,6 +123,20 @@ const mesaMembroRoutes = require("./src/routes/mesaMembroRoutes");
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
 const contaRoutes = require("./src/routes/contaRoutes");
 const faturaRoutes = require("./src/routes/faturaRoutes");
+
+app.use("/api", apiLimiter);
+
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/reenviar-verificacao", authLimiter);
+app.use("/api/auth/solicitar-recuperacao-senha", authLimiter);
+app.use("/api/auth/resetar-senha", authLimiter);
+
+app.use("/api/despesas", financeLimiter);
+app.use("/api/receitas", financeLimiter);
+app.use("/api/faturas", financeLimiter);
+app.use("/api/dashboard", financeLimiter);
+app.use("/api/convites", conviteLimiter);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/categorias", categoriaRoutes);

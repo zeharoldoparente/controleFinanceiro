@@ -53,7 +53,7 @@ class MesaController {
             }
 
             console.warn(
-               "Não foi possível marcar papel de criador (modo compatibilidade):",
+               "Nao foi possivel marcar papel de criador (modo compatibilidade):",
                papelError.sqlMessage || papelError.message,
             );
          }
@@ -123,6 +123,10 @@ class MesaController {
             return res.status(403).json({ error: error.message });
          }
 
+         if (error.message === "Identificador invalido") {
+            return res.status(400).json({ error: error.message });
+         }
+
          res.status(500).json({ error: "Erro ao atualizar mesa" });
       }
    }
@@ -141,6 +145,10 @@ class MesaController {
 
          if (error.message === "Apenas o criador pode deletar a mesa") {
             return res.status(403).json({ error: error.message });
+         }
+
+         if (error.message === "Identificador invalido") {
+            return res.status(400).json({ error: error.message });
          }
 
          res.status(500).json({ error: "Erro ao deletar mesa" });

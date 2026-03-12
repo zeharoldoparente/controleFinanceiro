@@ -2,6 +2,7 @@ const express = require("express");
 const DespesaController = require("../controllers/despesaController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/uploadMiddleware");
+const requireMesaWriteAccess = require("../middlewares/mesaWriteAccessMiddleware");
 
 const router = express.Router();
 
@@ -68,7 +69,7 @@ router.use(authMiddleware);
  *       403:
  *         description: Sem acesso a esta mesa
  */
-router.post("/", DespesaController.create);
+router.post("/", requireMesaWriteAccess, DespesaController.create);
 
 /**
  * @swagger
@@ -155,10 +156,7 @@ router.get("/grupo/:parcela_grupo_id", DespesaController.getByParcelaGrupo);
  *       200:
  *         description: Todas as parcelas foram inativadas
  */
-router.patch(
-   "/grupo/:parcela_grupo_id/inativar",
-   DespesaController.inativarGrupo,
-);
+router.patch("/grupo/:parcela_grupo_id/inativar", requireMesaWriteAccess, DespesaController.inativarGrupo);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Rotas com /:id — específicas com sufixo ANTES da genérica /:id
@@ -253,7 +251,7 @@ router.get("/:id", DespesaController.show);
  *       200:
  *         description: Despesa atualizada
  */
-router.put("/:id", DespesaController.update);
+router.put("/:id", requireMesaWriteAccess, DespesaController.update);
 
 /**
  * @swagger
@@ -297,11 +295,7 @@ router.put("/:id", DespesaController.update);
  *       200:
  *         description: Despesa marcada como paga
  */
-router.patch(
-   "/:id/pagar",
-   upload.single("comprovante"),
-   DespesaController.marcarComoPaga,
-);
+router.patch("/:id/pagar", upload.single("comprovante"), requireMesaWriteAccess, DespesaController.marcarComoPaga);
 
 /**
  * @swagger
@@ -339,7 +333,7 @@ router.patch(
  *       404:
  *         description: Despesa não encontrada
  */
-router.patch("/:id/desfazer-pagamento", DespesaController.desmarcarPagamento);
+router.patch("/:id/desfazer-pagamento", requireMesaWriteAccess, DespesaController.desmarcarPagamento);
 
 /**
  * @swagger
@@ -380,10 +374,7 @@ router.patch("/:id/desfazer-pagamento", DespesaController.desmarcarPagamento);
  *       400:
  *         description: Despesa não é recorrente ou mês inválido
  */
-router.patch(
-   "/:id/cancelar-recorrencia",
-   DespesaController.cancelarRecorrencia,
-);
+router.patch("/:id/cancelar-recorrencia", requireMesaWriteAccess, DespesaController.cancelarRecorrencia);
 
 /**
  * @swagger
@@ -417,10 +408,7 @@ router.patch(
  *       200:
  *         description: Cancelamento removido com sucesso
  */
-router.patch(
-   "/:id/remover-cancelamento",
-   DespesaController.removerCancelamento,
-);
+router.patch("/:id/remover-cancelamento", requireMesaWriteAccess, DespesaController.removerCancelamento);
 
 /**
  * @swagger
@@ -447,7 +435,7 @@ router.patch(
  *       200:
  *         description: Despesa reativada com sucesso
  */
-router.patch("/:id/reativar", DespesaController.reativar);
+router.patch("/:id/reativar", requireMesaWriteAccess, DespesaController.reativar);
 
 /**
  * @swagger
@@ -484,11 +472,7 @@ router.patch("/:id/reativar", DespesaController.reativar);
  *       200:
  *         description: Comprovante atualizado
  */
-router.post(
-   "/:id/comprovante",
-   upload.single("comprovante"),
-   DespesaController.uploadComprovante,
-);
+router.post("/:id/comprovante", upload.single("comprovante"), requireMesaWriteAccess, DespesaController.uploadComprovante);
 
 /**
  * @swagger
@@ -542,7 +526,7 @@ router.get("/:id/comprovante/download", DespesaController.getComprovante);
  *       200:
  *         description: Comprovante excluído
  */
-router.delete("/:id/comprovante", DespesaController.deleteComprovante);
+router.delete("/:id/comprovante", requireMesaWriteAccess, DespesaController.deleteComprovante);
 
 /**
  * @swagger
@@ -569,6 +553,7 @@ router.delete("/:id/comprovante", DespesaController.deleteComprovante);
  *       200:
  *         description: Despesa inativada com sucesso
  */
-router.delete("/:id", DespesaController.inativar);
+router.delete("/:id", requireMesaWriteAccess, DespesaController.inativar);
 
 module.exports = router;
+

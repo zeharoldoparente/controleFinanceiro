@@ -255,7 +255,7 @@ class Convite {
 
    static async aceitar(conviteId, token) {
       const { map } = await this.getMeta();
-      if (!map.status) return;
+      if (!map.status) return 0;
 
       const whereClauses = [`${this.quoteIdentifier(map.id)} = ?`];
       const params = [conviteId];
@@ -265,15 +265,19 @@ class Convite {
          params.push(token);
       }
 
-      await db.query(
+      whereClauses.push(`${this.quoteIdentifier(map.status)} = 'pendente'`);
+
+      const [result] = await db.query(
          `UPDATE convites SET ${this.quoteIdentifier(map.status)} = 'aceito' WHERE ${whereClauses.join(" AND ")}`,
          params,
       );
+
+      return result.affectedRows;
    }
 
    static async recusar(conviteId, token) {
       const { map } = await this.getMeta();
-      if (!map.status) return;
+      if (!map.status) return 0;
 
       const whereClauses = [`${this.quoteIdentifier(map.id)} = ?`];
       const params = [conviteId];
@@ -283,10 +287,14 @@ class Convite {
          params.push(token);
       }
 
-      await db.query(
+      whereClauses.push(`${this.quoteIdentifier(map.status)} = 'pendente'`);
+
+      const [result] = await db.query(
          `UPDATE convites SET ${this.quoteIdentifier(map.status)} = 'recusado' WHERE ${whereClauses.join(" AND ")}`,
          params,
       );
+
+      return result.affectedRows;
    }
 
    static async findEnviadosByUserId(userId) {

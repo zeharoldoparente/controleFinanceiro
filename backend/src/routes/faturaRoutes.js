@@ -1,6 +1,7 @@
 const express = require("express");
 const FaturaController = require("../controllers/faturaController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const requireMesaWriteAccess = require("../middlewares/mesaWriteAccessMiddleware");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -140,7 +141,7 @@ router.get("/:id", FaturaController.show);
  *       409:
  *         description: Fatura já está paga
  */
-router.patch("/:id/pagar", FaturaController.pagar);
+router.patch("/:id/pagar", requireMesaWriteAccess, FaturaController.pagar);
 
 /**
  * @swagger
@@ -178,6 +179,7 @@ router.patch("/:id/pagar", FaturaController.pagar);
  *       404:
  *         description: Fatura não encontrada
  */
-router.patch("/:id/desfazer-pagamento", FaturaController.desfazerPagamento);
+router.patch("/:id/desfazer-pagamento", requireMesaWriteAccess, FaturaController.desfazerPagamento);
 
 module.exports = router;
+

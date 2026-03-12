@@ -2,8 +2,16 @@ const express = require("express");
 const router = express.Router();
 const ConviteController = require("../controllers/conviteController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const { createRateLimiter } = require("../middlewares/rateLimitMiddleware");
 
 router.use(authMiddleware);
+
+const conviteAcaoLimiter = createRateLimiter({
+   windowMs: 10 * 60 * 1000,
+   max: 20,
+   keyGenerator: (req) => req.ip,
+   message: "Muitas tentativas de processamento de convite. Aguarde alguns minutos.",
+});
 
 /**
  * @swagger
@@ -188,7 +196,7 @@ router.get("/enviados", ConviteController.listEnviados);
  *       404:
  *         description: Convite não encontrado
  */
-router.post("/:token/aceitar", ConviteController.aceitar);
+router.post("/:token/aceitar", conviteAcaoLimiter, ConviteController.aceitar);
 
 /**
  * @swagger
@@ -225,6 +233,6 @@ router.post("/:token/aceitar", ConviteController.aceitar);
  *       404:
  *         description: Convite não encontrado
  */
-router.post("/:token/recusar", ConviteController.recusar);
+router.post("/:token/recusar", conviteAcaoLimiter, ConviteController.recusar);
 
 module.exports = router;

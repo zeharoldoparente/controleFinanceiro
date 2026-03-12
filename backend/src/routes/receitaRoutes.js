@@ -1,6 +1,7 @@
 const express = require("express");
 const ReceitaController = require("../controllers/receitaController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const requireMesaWriteAccess = require("../middlewares/mesaWriteAccessMiddleware");
 
 const router = express.Router();
 
@@ -86,7 +87,7 @@ router.use(authMiddleware);
  *       403:
  *         description: Sem acesso a esta mesa
  */
-router.post("/", ReceitaController.create);
+router.post("/", requireMesaWriteAccess, ReceitaController.create);
 
 /**
  * @swagger
@@ -214,7 +215,7 @@ router.get("/:id", ReceitaController.show);
  *       404:
  *         description: Receita não encontrada
  */
-router.put("/:id", ReceitaController.update);
+router.put("/:id", requireMesaWriteAccess, ReceitaController.update);
 
 /**
  * @swagger
@@ -289,7 +290,7 @@ router.put("/:id", ReceitaController.update);
  *       409:
  *         description: Recebimento já confirmado para este mês
  */
-router.patch("/:id/confirmar", ReceitaController.confirmar);
+router.patch("/:id/confirmar", requireMesaWriteAccess, ReceitaController.confirmar);
 
 /**
  * @swagger
@@ -334,10 +335,7 @@ router.patch("/:id/confirmar", ReceitaController.confirmar);
  *       404:
  *         description: Receita não encontrada
  */
-router.patch(
-   "/:id/desfazer-confirmacao",
-   ReceitaController.desfazerConfirmacao,
-);
+router.patch("/:id/desfazer-confirmacao", requireMesaWriteAccess, ReceitaController.desfazerConfirmacao);
 
 /**
  * @swagger
@@ -367,7 +365,7 @@ router.patch(
  *       404:
  *         description: Receita não encontrada
  */
-router.patch("/:id/reativar", ReceitaController.reativar);
+router.patch("/:id/reativar", requireMesaWriteAccess, ReceitaController.reativar);
 
 /**
  * @swagger
@@ -397,6 +395,7 @@ router.patch("/:id/reativar", ReceitaController.reativar);
  *       404:
  *         description: Receita não encontrada
  */
-router.delete("/:id", ReceitaController.inativar);
+router.delete("/:id", requireMesaWriteAccess, ReceitaController.inativar);
 
 module.exports = router;
+
