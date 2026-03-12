@@ -107,6 +107,15 @@ const receitaService = {
       return response.data;
    },
 
+
+   buscarParcelasGrupo: async (grupoParcela: string, mesaId: number) => {
+      const params = new URLSearchParams();
+      params.append("mesa_id", mesaId.toString());
+      const response = await api.get(
+         `/receitas/grupo/${grupoParcela}?${params.toString()}`,
+      );
+      return response.data.receitas as Receita[];
+   },
    reativar: async (id: number, mesaId: number) => {
       const response = await api.patch(
          `/receitas/${id}/reativar?mesa_id=${mesaId}`,

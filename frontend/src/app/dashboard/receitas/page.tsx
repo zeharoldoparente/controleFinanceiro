@@ -117,6 +117,12 @@ export default function ReceitasPage() {
    const [modalExcluir, setModalExcluir] = useState<Receita | null>(null);
    const [loadingExcluir, setLoadingExcluir] = useState(false);
    const [escopoExclusao, setEscopoExclusao] = useState<"apenas" | "posteriores">("apenas");
+   const [resumoParcelasEdicao, setResumoParcelasEdicao] = useState<{
+      total: number;
+      realizado: number;
+   } | null>(null);
+   const [loadingResumoParcelasEdicao, setLoadingResumoParcelasEdicao] =
+      useState(false);
 
    // Campos formulário
    const [descricao, setDescricao] = useState("");
@@ -230,6 +236,45 @@ export default function ReceitasPage() {
 
    // ─── Modal criar/editar ───────────────────────────────────────────────────
 
+   const carregarResumoParcelasEdicao = async (receita: Receita) => {
+      if (
+         !mesaSelecionada ||
+         receita.parcelas <= 1 ||
+         !receita.grupo_parcela
+      ) {
+         setResumoParcelasEdicao(null);
+         setLoadingResumoParcelasEdicao(false);
+         return;
+      }
+
+      setLoadingResumoParcelasEdicao(true);
+      try {
+         const grupo = await receitaService.buscarParcelasGrupo(
+            receita.grupo_parcela,
+            mesaSelecionada.id,
+         );
+
+         const ativas = grupo.filter((r) => Boolean(r.ativa));
+         const base = ativas.length > 0 ? ativas : grupo;
+
+         const total = base.reduce(
+            (acc, r) => acc + parseFloat(String(r.valor ?? 0)),
+            0,
+         );
+         const realizado = base.reduce((acc, r) => {
+            if (r.status !== "recebida") return acc;
+            const valorRealizado = r.valor_real ?? r.valor;
+            return acc + parseFloat(String(valorRealizado ?? 0));
+         }, 0);
+
+         setResumoParcelasEdicao({ total, realizado });
+      } catch {
+         setResumoParcelasEdicao(null);
+      } finally {
+         setLoadingResumoParcelasEdicao(false);
+      }
+   };
+
    const abrirModal = (receita?: Receita) => {
       if (receita) {
          setEditando(receita);
@@ -240,6 +285,7 @@ export default function ReceitasPage() {
          setTipoPagamentoId(receita.tipo_pagamento_id || "");
          setRecorrente(!!receita.recorrente);
          setParcelas(receita.parcelas || 1);
+         void carregarResumoParcelasEdicao(receita);
       } else {
          setEditando(null);
          setDescricao("");
@@ -249,6 +295,8 @@ export default function ReceitasPage() {
          setTipoPagamentoId("");
          setRecorrente(false);
          setParcelas(1);
+         setResumoParcelasEdicao(null);
+         setLoadingResumoParcelasEdicao(false);
       }
       setErro("");
       setModalAberto(true);
@@ -265,6 +313,8 @@ export default function ReceitasPage() {
       setRecorrente(false);
       setParcelas(1);
       setErro("");
+      setResumoParcelasEdicao(null);
+      setLoadingResumoParcelasEdicao(false);
    };
 
    const salvarReceita = async (e: React.FormEvent) => {
@@ -1027,15 +1077,39 @@ export default function ReceitasPage() {
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:p-6">
                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md sm:max-w-lg max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
                   <div className="p-4 sm:p-6">
-                     <h2 className="text-lg font-bold text-gray-800 mb-1">
-                        {editando ? "Editar Receita" : "Nova Receita"}
-                     </h2>
-                     <p className="text-xs text-gray-500 mb-4">
-                        Mesa:{" "}
-                        <span className="font-semibold text-green-600">
-                           {mesaSelecionada?.nome}
-                        </span>
-                     </p>
+                     <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                           <h2 className="text-lg font-bold text-gray-800 mb-1">
+                              {editando ? "Editar Receita" : "Nova Receita"}
+                           </h2>
+                           <p className="text-xs text-gray-500">
+                              Mesa:{" "}
+                              <span className="font-semibold text-green-600">
+                                 {mesaSelecionada?.nome}
+                              </span>
+                           </p>
+                        </div>
+                        {(editando?.parcelas ?? 1) > 1 && (
+                           <div className="text-right text-[11px] text-gray-400 leading-tight shrink-0">
+                              {loadingResumoParcelasEdicao ? (
+                                 <p>Carregando totais...</p>
+                              ) : resumoParcelasEdicao ? (
+                                 <>
+                                    <p>
+                                       Total previsto: {formatarValor(resumoParcelasEdicao.total)}
+                                    </p>
+                                    <p>
+                                       Total recebido: {formatarValor(resumoParcelasEdicao.realizado)}
+                                    </p>
+                                 </>
+                              ) : (
+                                 <p>
+                                    Parcela {editando?.parcela_atual ?? 1} de {editando?.parcelas ?? 1}
+                                 </p>
+                              )}
+                           </div>
+                        )}
+                     </div>
 
                      {erro && (
                         <div className="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
@@ -1460,3 +1534,4 @@ export default function ReceitasPage() {
       </DashboardLayout>
    );
 }
+

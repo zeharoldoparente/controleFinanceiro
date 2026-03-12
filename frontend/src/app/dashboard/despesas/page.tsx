@@ -60,6 +60,7 @@ type StatusDespesa = "paga" | "a_vencer" | "vencida";
 type FiltroStatus = "todas" | StatusDespesa;
 type FiltroTipo = "todas" | TipoDespesa | "cartao";
 type EscopoExclusao = "apenas" | "posteriores";
+type ResumoParcelas = { total: number; realizado: number };
 
 function getStatus(d: Despesa): StatusDespesa {
    if (d.paga) return "paga";
@@ -162,6 +163,10 @@ export default function DespesasPage() {
    const [modalDetalhe, setModalDetalhe] = useState<Despesa | null>(null);
    const [comprovanteUrl, setComprovanteUrl] = useState<string | null>(null);
    const [loadingComprovante, setLoadingComprovante] = useState(false);
+   const [resumoParcelasDetalhe, setResumoParcelasDetalhe] =
+      useState<ResumoParcelas | null>(null);
+   const [loadingResumoParcelasDetalhe, setLoadingResumoParcelasDetalhe] =
+      useState(false);
 
    const [modalDetalheFatura, setModalDetalheFatura] = useState<Fatura | null>(
       null,
@@ -642,6 +647,37 @@ export default function DespesasPage() {
    const abrirDetalhe = async (despesa: Despesa) => {
       setModalDetalhe(despesa);
       setComprovanteUrl(null);
+      setResumoParcelasDetalhe(null);
+
+      if (despesa.parcelas > 1 && despesa.parcela_grupo_id && mesaSelecionada) {
+         setLoadingResumoParcelasDetalhe(true);
+         try {
+            const grupo = await despesaService.buscarParcelas(
+               despesa.parcela_grupo_id,
+               mesaSelecionada.id,
+            );
+
+            const ativas = grupo.filter((p) => Boolean(p.ativa));
+            const base = ativas.length > 0 ? ativas : grupo;
+
+            const total = base.reduce(
+               (acc, p) => acc + parseFloat(String(p.valor_provisionado ?? 0)),
+               0,
+            );
+            const realizado = base.reduce((acc, p) => {
+               if (!p.paga) return acc;
+               const valorRealizado = p.valor_real ?? p.valor_provisionado;
+               return acc + parseFloat(String(valorRealizado ?? 0));
+            }, 0);
+
+            setResumoParcelasDetalhe({ total, realizado });
+         } catch {
+            setResumoParcelasDetalhe(null);
+         } finally {
+            setLoadingResumoParcelasDetalhe(false);
+         }
+      }
+
       if (despesa.comprovante && mesaSelecionada) {
          setLoadingComprovante(true);
          try {
@@ -662,6 +698,8 @@ export default function DespesasPage() {
       if (comprovanteUrl) URL.revokeObjectURL(comprovanteUrl);
       setModalDetalhe(null);
       setComprovanteUrl(null);
+      setResumoParcelasDetalhe(null);
+      setLoadingResumoParcelasDetalhe(false);
    };
 
    const BadgeStatus = ({ despesa }: { despesa: Despesa }) => {
@@ -1782,6 +1820,8 @@ export default function DespesasPage() {
                onClose={fecharDetalhe}
                comprovanteUrl={comprovanteUrl}
                loadingComprovante={loadingComprovante}
+               resumoParcelas={resumoParcelasDetalhe}
+               loadingResumoParcelas={loadingResumoParcelasDetalhe}
                mesaSelecionada={mesaSelecionada}
                onCancelar={(d) => {
                   fecharDetalhe();
@@ -2838,6 +2878,8 @@ function ModalDetalheDespesa({
    onClose,
    comprovanteUrl,
    loadingComprovante,
+   resumoParcelas,
+   loadingResumoParcelas,
    mesaSelecionada,
    onCancelar,
    onReativar,
@@ -2846,6 +2888,8 @@ function ModalDetalheDespesa({
    onClose: () => void;
    comprovanteUrl: string | null;
    loadingComprovante: boolean;
+   resumoParcelas: ResumoParcelas | null;
+   loadingResumoParcelas: boolean;
    mesaSelecionada: { id: number; nome: string } | null;
    onCancelar: (d: Despesa) => void;
    onReativar: (d: Despesa) => void;
@@ -2875,6 +2919,22 @@ function ModalDetalheDespesa({
                      )}
                   </div>
                </div>
+               {despesa.parcelas > 1 && (
+                  <div className="hidden sm:block text-right mr-2 shrink-0">
+                     {loadingResumoParcelas ? (
+                        <p className="text-[11px] text-gray-400">Carregando totais...</p>
+                     ) : resumoParcelas ? (
+                        <>
+                           <p className="text-[11px] text-gray-400 leading-tight">
+                              Total compra: {formatarValor(resumoParcelas.total)}
+                           </p>
+                           <p className="text-[11px] text-gray-400 leading-tight">
+                              Total gasto: {formatarValor(resumoParcelas.realizado)}
+                           </p>
+                        </>
+                     ) : null}
+                  </div>
+               )}
                <button
                   onClick={onClose}
                   className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
@@ -2963,10 +3023,15 @@ function ModalDetalheDespesa({
                   </div>
                )}
                {despesa.parcelas > 1 && (
-                  <div className="bg-blue-50 rounded-xl p-3 flex items-center gap-2">
+                  <div className="bg-blue-50 rounded-xl p-3">
                      <p className="text-sm text-blue-700 font-medium">
                         Parcela {despesa.parcela_atual} de {despesa.parcelas}
                      </p>
+                     {resumoParcelas && (
+                        <p className="text-xs text-blue-500 mt-1">
+                           Total compra {formatarValor(resumoParcelas.total)} · gasto {formatarValor(resumoParcelas.realizado)}
+                        </p>
+                     )}
                   </div>
                )}
                {despesa.cartao_nome && (
@@ -3264,3 +3329,4 @@ function ModalPagarDespesa({
       </div>
    );
 }
+

@@ -291,6 +291,31 @@ class ReceitaController {
       }
    }
 
+
+   // ─── GRUPO DE PARCELAS ────────────────────────────────────────────────────
+
+   static async getByGrupoParcela(req, res) {
+      try {
+         const { grupo_parcela } = req.params;
+         const { mesa_id } = req.query;
+         const userId = req.userId;
+
+         if (!mesa_id)
+            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+
+         const mesa = await Mesa.findById(mesa_id, userId);
+         if (!mesa)
+            return res
+               .status(403)
+               .json({ error: "Você não tem acesso a esta mesa" });
+
+         const receitas = await Receita.findByGrupoParcela(grupo_parcela, mesa_id);
+         res.json({ receitas });
+      } catch (error) {
+         console.error(error);
+         res.status(500).json({ error: "Erro ao buscar grupo de parcelas" });
+      }
+   }
    // ─── INATIVAR / REATIVAR / DELETE ─────────────────────────────────────────
 
    static async inativar(req, res) {

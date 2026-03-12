@@ -87,32 +87,40 @@ class DashboardController {
          // ── 3. Despesas pagas do mês ─────────────────────────────────────────
          const [[despesasPagas]] = await db.query(
             `SELECT
-               COALESCE(SUM(COALESCE(valor_real, valor_provisionado)), 0) AS pago,
+               COALESCE(SUM(COALESCE(d.valor_real, d.valor_provisionado)), 0) AS pago,
                COUNT(*) AS qtd_pagas
-             FROM despesas
-             WHERE mesa_id IN (${ph})
-               AND paga = TRUE
-               AND ativa = TRUE
-               AND data_cancelamento IS NULL
-               AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?`,
+             FROM despesas d
+             LEFT JOIN faturas f ON d.fatura_id = f.id
+             WHERE d.mesa_id IN (${ph})
+               AND d.paga = TRUE
+               AND d.ativa = TRUE
+               AND d.data_cancelamento IS NULL
+               AND DATE_FORMAT(COALESCE(f.data_vencimento, d.data_vencimento), '%Y-%m') = ?`,
             [...mesaIds, mesFiltro],
          );
 
          const [[despesasPendentes]] = await db.query(
             `SELECT
-               COALESCE(SUM(valor_provisionado), 0) AS pendente,
+               COALESCE(SUM(d.valor_provisionado), 0) AS pendente,
                COUNT(*) AS qtd_pendentes
-             FROM despesas
-             WHERE mesa_id IN (${ph})
-               AND paga = FALSE
-               AND ativa = TRUE
+             FROM despesas d
+             LEFT JOIN faturas f ON d.fatura_id = f.id
+             WHERE d.mesa_id IN (${ph})
+               AND d.paga = FALSE
+               AND d.ativa = TRUE
                AND (
-                  (recorrente = FALSE AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?)
+                  (
+                     d.recorrente = FALSE
+                     AND DATE_FORMAT(COALESCE(f.data_vencimento, d.data_vencimento), '%Y-%m') = ?
+                  )
                   OR
                   (
-                     recorrente = TRUE
-                     AND data_vencimento <= LAST_DAY(?)
-                     AND (data_cancelamento IS NULL OR DATE_FORMAT(data_cancelamento, '%Y-%m') > ?)
+                     d.recorrente = TRUE
+                     AND d.data_vencimento <= LAST_DAY(?)
+                     AND (
+                        d.data_cancelamento IS NULL
+                        OR DATE_FORMAT(d.data_cancelamento, '%Y-%m') > ?
+                     )
                   )
                )`,
             [...mesaIds, mesFiltro, primeiroDia, mesFiltro],
@@ -124,34 +132,41 @@ class DashboardController {
 
          // ── 4. Alertas ───────────────────────────────────────────────────────
          const [despesasVencidas] = await db.query(
-            `SELECT d.id, d.descricao, d.valor_provisionado AS valor, d.data_vencimento,
+            `SELECT d.id, d.descricao, d.valor_provisionado AS valor,
+                    COALESCE(f.data_vencimento, d.data_vencimento) AS data_vencimento,
                     m.nome AS mesa_nome, c.nome AS categoria_nome
-             FROM despesas d
-             LEFT JOIN mesas m ON d.mesa_id = m.id
-             LEFT JOIN categorias c ON d.categoria_id = c.id
-             WHERE d.mesa_id IN (${ph})
-               AND d.paga = FALSE
-               AND d.ativa = TRUE
-               AND d.data_cancelamento IS NULL
-               AND d.data_vencimento < ?
-               AND (d.recorrente = FALSE OR DATE_FORMAT(d.data_vencimento, '%Y-%m') <= ?)
-             ORDER BY d.data_vencimento ASC
-             LIMIT 5`,
+              FROM despesas d
+              LEFT JOIN faturas f ON d.fatura_id = f.id
+              LEFT JOIN mesas m ON d.mesa_id = m.id
+              LEFT JOIN categorias c ON d.categoria_id = c.id
+              WHERE d.mesa_id IN (${ph})
+                AND d.paga = FALSE
+                AND d.ativa = TRUE
+                AND d.data_cancelamento IS NULL
+                AND COALESCE(f.data_vencimento, d.data_vencimento) < ?
+                AND (
+                   d.recorrente = FALSE
+                   OR DATE_FORMAT(COALESCE(f.data_vencimento, d.data_vencimento), '%Y-%m') <= ?
+                )
+              ORDER BY COALESCE(f.data_vencimento, d.data_vencimento) ASC
+              LIMIT 5`,
             [...mesaIds, hoje, mesFiltro],
          );
 
          const [despesasHoje] = await db.query(
-            `SELECT d.id, d.descricao, d.valor_provisionado AS valor, d.data_vencimento,
+            `SELECT d.id, d.descricao, d.valor_provisionado AS valor,
+                    COALESCE(f.data_vencimento, d.data_vencimento) AS data_vencimento,
                     m.nome AS mesa_nome
-             FROM despesas d
-             LEFT JOIN mesas m ON d.mesa_id = m.id
-             WHERE d.mesa_id IN (${ph})
-               AND d.paga = FALSE
-               AND d.data_vencimento = ?
-               AND d.ativa = TRUE
-               AND d.data_cancelamento IS NULL
-             ORDER BY d.valor_provisionado DESC
-             LIMIT 5`,
+              FROM despesas d
+              LEFT JOIN faturas f ON d.fatura_id = f.id
+              LEFT JOIN mesas m ON d.mesa_id = m.id
+              WHERE d.mesa_id IN (${ph})
+                AND d.paga = FALSE
+                AND COALESCE(f.data_vencimento, d.data_vencimento) = ?
+                AND d.ativa = TRUE
+                AND d.data_cancelamento IS NULL
+              ORDER BY d.valor_provisionado DESC
+              LIMIT 5`,
             [...mesaIds, hoje],
          );
 
@@ -179,16 +194,18 @@ class DashboardController {
                COALESCE((
                   SELECT SUM(COALESCE(d.valor_real, d.valor_provisionado))
                   FROM despesas d
+                  LEFT JOIN faturas f ON f.id = d.fatura_id
                   WHERE d.cartao_id = ca.id
                     AND d.paga = TRUE AND d.ativa = TRUE AND d.data_cancelamento IS NULL
-                    AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+                    AND DATE_FORMAT(COALESCE(f.data_vencimento, d.data_vencimento), '%Y-%m') = ?
                ), 0) AS gasto_mes,
                COALESCE((
                   SELECT SUM(d.valor_provisionado)
                   FROM despesas d
+                  LEFT JOIN faturas f ON f.id = d.fatura_id
                   WHERE d.cartao_id = ca.id
                     AND d.paga = FALSE AND d.ativa = TRUE AND d.data_cancelamento IS NULL
-                    AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+                    AND DATE_FORMAT(COALESCE(f.data_vencimento, d.data_vencimento), '%Y-%m') = ?
                ), 0) AS pendente_mes
              FROM cartoes ca
              LEFT JOIN bandeiras b ON ca.bandeira_id = b.id

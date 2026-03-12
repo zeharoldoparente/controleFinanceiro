@@ -125,6 +125,9 @@ router.post("/", ReceitaController.create);
  */
 router.get("/", ReceitaController.list);
 
+// Rota específica deve vir antes de /:id
+router.get("/grupo/:grupo_parcela", ReceitaController.getByGrupoParcela);
+
 /**
  * @swagger
  * /api/receitas/{id}:

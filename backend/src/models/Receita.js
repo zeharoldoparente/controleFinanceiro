@@ -276,6 +276,20 @@ class Receita {
       );
       return rows[0];
    }
+   static async findByGrupoParcela(grupoParcela, mesaId) {
+      const [rows] = await db.query(
+         `SELECT r.*,
+             c.nome  AS categoria_nome,
+             tp.nome AS tipo_pagamento_nome
+          FROM receitas r
+          LEFT JOIN categorias      c  ON r.categoria_id      = c.id
+          LEFT JOIN tipos_pagamento tp ON r.tipo_pagamento_id = tp.id
+          WHERE r.grupo_parcela = ? AND r.mesa_id = ?
+          ORDER BY r.parcela_atual ASC`,
+         [grupoParcela, mesaId],
+      );
+      return rows;
+   }
 
    static async findByMesaId(mesaId, incluirInativas = false) {
       let query = `
