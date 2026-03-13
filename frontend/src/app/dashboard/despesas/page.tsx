@@ -3114,17 +3114,26 @@ function ModalDetalheDespesa({
                         </svg>
                      </div>
                   ) : comprovanteUrl ? (
-                     <div className="rounded-xl overflow-hidden border border-gray-200">
+                     <div className="space-y-3">
+                        <div className="rounded-xl overflow-hidden border border-gray-200">
+                           <a
+                              href={comprovanteUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                           >
+                              <img
+                                 src={comprovanteUrl}
+                                 alt="Comprovante"
+                                 className="w-full max-h-64 object-contain bg-gray-50"
+                              />
+                           </a>
+                        </div>
                         <a
                            href={comprovanteUrl}
-                           target="_blank"
-                           rel="noreferrer"
+                           download={`comprovante-despesa-${despesa.id}`}
+                           className="inline-flex w-full items-center justify-center rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-100"
                         >
-                           <img
-                              src={comprovanteUrl}
-                              alt="Comprovante"
-                              className="w-full max-h-64 object-contain bg-gray-50"
-                           />
+                           Baixar comprovante
                         </a>
                      </div>
                   ) : (
