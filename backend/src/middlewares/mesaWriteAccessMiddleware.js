@@ -30,7 +30,7 @@ function getMesaIdFromRequest(req) {
 }
 
 function getAllowedWriteRoles() {
-   const raw = String(process.env.MESA_WRITE_ROLES || "criador,editor");
+   const raw = String(process.env.MESA_WRITE_ROLES || "criador,editor,convidado");
    return new Set(
       raw
          .split(",")
@@ -86,9 +86,8 @@ async function requireMesaWriteAccess(req, res, next) {
 
       const roleBasedAccessAvailable = await hasPapelColumn();
       if (!roleBasedAccessAvailable) {
-         return res.status(403).json({
-            error: "Somente o criador da mesa pode alterar dados",
-         });
+         req.mesa = mesa;
+         return next();
       }
 
       const [rows] = await db.query(

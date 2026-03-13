@@ -40,8 +40,10 @@ class DespesaController {
                .status(403)
                .json({ error: "Você não tem acesso a esta mesa" });
 
+         const resourceOwnerId = Number(mesa.criador_id) || Number(userId);
+
          if (cartao_id) {
-            const cartao = await Cartao.findById(cartao_id, userId);
+            const cartao = await Cartao.findById(cartao_id, resourceOwnerId);
             if (!cartao || !cartao.ativa)
                return res
                   .status(400)
@@ -57,7 +59,10 @@ class DespesaController {
          }
 
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
+            const tp = await TipoPagamento.findById(
+               tipo_pagamento_id,
+               resourceOwnerId,
+            );
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -65,7 +70,7 @@ class DespesaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id, userId);
+            const cat = await Categoria.findById(categoria_id, resourceOwnerId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)
@@ -195,12 +200,17 @@ class DespesaController {
                .status(403)
                .json({ error: "Você não tem acesso a esta mesa" });
 
+         const resourceOwnerId = Number(mesa.criador_id) || Number(userId);
+
          const despesa = await Despesa.findById(id, mesa_id);
          if (!despesa)
             return res.status(404).json({ error: "Despesa não encontrada" });
 
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
+            const tp = await TipoPagamento.findById(
+               tipo_pagamento_id,
+               resourceOwnerId,
+            );
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -208,7 +218,7 @@ class DespesaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id, userId);
+            const cat = await Categoria.findById(categoria_id, resourceOwnerId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)
@@ -217,6 +227,22 @@ class DespesaController {
                return res
                   .status(400)
                   .json({ error: "Categoria deve ser do tipo 'despesa'" });
+         }
+
+         if (cartao_id) {
+            const cartao = await Cartao.findById(cartao_id, resourceOwnerId);
+            if (!cartao || !cartao.ativa)
+               return res
+                  .status(400)
+                  .json({ error: "CartÃ£o invÃ¡lido ou inativo" });
+            if (cartao.tipo !== "credito")
+               return res
+                  .status(400)
+                  .json({ error: "Apenas cartÃµes de crÃ©dito geram fatura" });
+            if (recorrente)
+               return res.status(400).json({
+                  error: "Despesas de cartÃ£o de crÃ©dito nÃ£o podem ser recorrentes",
+               });
          }
 
          await Despesa.update(id, mesa_id, {
@@ -555,11 +581,7 @@ class DespesaController {
                .status(404)
                .json({ error: "Comprovante não encontrado" });
 
-         const filePath = path.join(
-            __dirname,
-            "../uploads/comprovantes",
-            comprovante,
-         );
+         const filePath = path.resolve(__dirname, "../../uploads", comprovante);
          if (!fs.existsSync(filePath))
             return res.status(404).json({ error: "Arquivo não encontrado" });
 
@@ -587,11 +609,7 @@ class DespesaController {
 
          const comprovante = await Despesa.getComprovante(id, mesa_id);
          if (comprovante) {
-            const filePath = path.join(
-               __dirname,
-               "../uploads/comprovantes",
-               comprovante,
-            );
+            const filePath = path.resolve(__dirname, "../../uploads", comprovante);
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
          }
 

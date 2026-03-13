@@ -12,10 +12,15 @@ export interface Categoria {
 }
 
 const categoriaService = {
-   listar: async (tipo?: string, incluirInativas: boolean = false) => {
+   listar: async (
+      tipo?: string,
+      incluirInativas: boolean = false,
+      mesaId?: number,
+   ) => {
       const params = new URLSearchParams();
       if (tipo) params.append("tipo", tipo);
       if (incluirInativas) params.append("incluirInativas", "true");
+      if (mesaId) params.append("mesa_id", String(mesaId));
 
       const response = await api.get(`/categorias?${params.toString()}`);
       return response.data.categorias as Categoria[];

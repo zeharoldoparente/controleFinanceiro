@@ -196,9 +196,9 @@ export default function DespesasPage() {
       const carregarSelects = async () => {
          try {
             const [cats, tipos, carts] = await Promise.all([
-               categoriaService.listar("despesa", false),
-               tipoPagamentoService.listar(false),
-               cartaoService.listar(false),
+               categoriaService.listar("despesa", false, mesaSelecionada.id),
+               tipoPagamentoService.listar(false, mesaSelecionada.id),
+               cartaoService.listar(false, mesaSelecionada.id),
             ]);
             setCategorias(cats);
             setTiposPagamento(tipos);
@@ -217,12 +217,17 @@ export default function DespesasPage() {
       }
       setLoading(true);
       try {
-         const [despesasData, faturasData] = await Promise.all([
+         const [despesasResult, faturasResult] = await Promise.allSettled([
             despesaService.listar(mesaSelecionada.id, mesSelecionado),
             faturaService.listarPorMesa(mesaSelecionada.id, mesSelecionado),
          ]);
-         setDespesas(despesasData);
-         setFaturas(faturasData);
+         if (despesasResult.status === "rejected") {
+            throw despesasResult.reason;
+         }
+         setDespesas(despesasResult.value);
+         setFaturas(
+            faturasResult.status === "fulfilled" ? faturasResult.value : [],
+         );
       } catch (err) {
          console.error("Erro ao carregar dados:", err);
          setErro("Erro ao carregar despesas");

@@ -83,9 +83,7 @@ const despesaService = {
          if (valorReal !== undefined)
             form.append("valor_real", String(valorReal));
          form.append("comprovante", arquivo);
-         await api.patch(`/despesas/${id}/pagar`, form, {
-            headers: { "Content-Type": "multipart/form-data" },
-         });
+         await api.patch(`/despesas/${id}/pagar`, form);
       } else {
          await api.patch(`/despesas/${id}/pagar`, {
             mesa_id: mesaId,

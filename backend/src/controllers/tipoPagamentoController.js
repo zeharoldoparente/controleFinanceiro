@@ -1,4 +1,5 @@
 const TipoPagamento = require("../models/TipoPagamento");
+const Mesa = require("../models/Mesa");
 
 class TipoPagamentoController {
    static async create(req, res) {
@@ -53,10 +54,22 @@ class TipoPagamentoController {
 
    static async list(req, res) {
       try {
-         const { incluirInativas } = req.query;
+         const { incluirInativas, mesa_id } = req.query;
+         let scopeUserId = req.userId;
+
+         if (mesa_id) {
+            const mesa = await Mesa.findById(mesa_id, req.userId);
+            if (!mesa) {
+               return res
+                  .status(403)
+                  .json({ error: "VocÃª nÃ£o tem acesso a esta mesa" });
+            }
+            scopeUserId = mesa.criador_id;
+         }
+
          const tiposPagamento = await TipoPagamento.findAll(
             incluirInativas === "true",
-            req.userId,
+            scopeUserId,
          );
 
          const normalizados = tiposPagamento.map((tp) => ({

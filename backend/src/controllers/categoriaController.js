@@ -1,4 +1,5 @@
 const Categoria = require("../models/Categoria");
+const Mesa = require("../models/Mesa");
 
 class CategoriaController {
    static async create(req, res) {
@@ -62,12 +63,23 @@ class CategoriaController {
 
    static async list(req, res) {
       try {
-         const { tipo, incluirInativas } = req.query;
+         const { tipo, incluirInativas, mesa_id } = req.query;
 
          if (tipo && tipo !== "receita" && tipo !== "despesa") {
             return res
                .status(400)
                .json({ error: 'Tipo deve ser "receita" ou "despesa"' });
+         }
+
+         let scopeUserId = req.userId;
+         if (mesa_id) {
+            const mesa = await Mesa.findById(mesa_id, req.userId);
+            if (!mesa) {
+               return res
+                  .status(403)
+                  .json({ error: "VocÃª nÃ£o tem acesso a esta mesa" });
+            }
+            scopeUserId = mesa.criador_id;
          }
 
          let categorias;
@@ -76,12 +88,12 @@ class CategoriaController {
             categorias = await Categoria.findByTipo(
                tipo,
                incluirInativas === "true",
-               req.userId,
+               scopeUserId,
             );
          } else {
             categorias = await Categoria.findAll(
                incluirInativas === "true",
-               req.userId,
+               scopeUserId,
             );
          }
 

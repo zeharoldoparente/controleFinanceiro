@@ -29,9 +29,10 @@ export interface CartaoCreate {
 }
 
 const cartaoService = {
-   listar: async (incluirInativas: boolean = false) => {
+   listar: async (incluirInativas: boolean = false, mesaId?: number) => {
       const params = new URLSearchParams();
       if (incluirInativas) params.append("incluirInativas", "true");
+      if (mesaId) params.append("mesa_id", String(mesaId));
 
       const response = await api.get(`/cartoes?${params.toString()}`);
       return response.data.cartoes as Cartao[];

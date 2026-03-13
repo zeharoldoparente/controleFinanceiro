@@ -11,9 +11,10 @@ export interface TipoPagamento {
 }
 
 const tipoPagamentoService = {
-   listar: async (incluirInativas: boolean = false) => {
+   listar: async (incluirInativas: boolean = false, mesaId?: number) => {
       const params = new URLSearchParams();
       if (incluirInativas) params.append("incluirInativas", "true");
+      if (mesaId) params.append("mesa_id", String(mesaId));
 
       const response = await api.get(`/tipos-pagamento?${params.toString()}`);
       return response.data.tiposPagamento as TipoPagamento[];

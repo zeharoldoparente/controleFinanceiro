@@ -1,7 +1,7 @@
 const express = require("express");
 const FaturaController = require("../controllers/faturaController");
 const authMiddleware = require("../middlewares/authMiddleware");
-const requireMesaWriteAccess = require("../middlewares/mesaWriteAccessMiddleware");
+const requireMesaOwnerAccess = require("../middlewares/mesaOwnerAccessMiddleware");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -36,7 +36,7 @@ router.use(authMiddleware);
  *       403:
  *         description: Sem acesso a esta mesa
  */
-router.get("/", FaturaController.listByCartao);
+router.get("/", requireMesaOwnerAccess, FaturaController.listByCartao);
 
 /**
  * @swagger
@@ -64,7 +64,7 @@ router.get("/", FaturaController.listByCartao);
  *       200:
  *         description: Lista de faturas do mês
  */
-router.get("/mesa", FaturaController.listByMesa);
+router.get("/mesa", requireMesaOwnerAccess, FaturaController.listByMesa);
 
 /**
  * @swagger
@@ -94,7 +94,7 @@ router.get("/mesa", FaturaController.listByMesa);
  *       404:
  *         description: Fatura não encontrada
  */
-router.get("/:id", FaturaController.show);
+router.get("/:id", requireMesaOwnerAccess, FaturaController.show);
 
 /**
  * @swagger
@@ -141,7 +141,7 @@ router.get("/:id", FaturaController.show);
  *       409:
  *         description: Fatura já está paga
  */
-router.patch("/:id/pagar", requireMesaWriteAccess, FaturaController.pagar);
+router.patch("/:id/pagar", requireMesaOwnerAccess, FaturaController.pagar);
 
 /**
  * @swagger
@@ -179,7 +179,7 @@ router.patch("/:id/pagar", requireMesaWriteAccess, FaturaController.pagar);
  *       404:
  *         description: Fatura não encontrada
  */
-router.patch("/:id/desfazer-pagamento", requireMesaWriteAccess, FaturaController.desfazerPagamento);
+router.patch("/:id/desfazer-pagamento", requireMesaOwnerAccess, FaturaController.desfazerPagamento);
 
 module.exports = router;
 

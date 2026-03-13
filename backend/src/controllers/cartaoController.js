@@ -1,5 +1,6 @@
 const Cartao = require("../models/Cartao");
 const Bandeira = require("../models/Bandeira");
+const Mesa = require("../models/Mesa");
 
 class CartaoController {
    static async create(req, res) {
@@ -75,10 +76,21 @@ class CartaoController {
    static async list(req, res) {
       try {
          const userId = req.userId;
-         const { incluirInativas } = req.query;
+         const { incluirInativas, mesa_id } = req.query;
+
+         let scopeUserId = userId;
+         if (mesa_id) {
+            const mesa = await Mesa.findById(mesa_id, userId);
+            if (!mesa) {
+               return res
+                  .status(403)
+                  .json({ error: "VocÃª nÃ£o tem acesso a esta mesa" });
+            }
+            scopeUserId = mesa.criador_id;
+         }
 
          const cartoes = await Cartao.findAll(
-            userId,
+            scopeUserId,
             incluirInativas === "true",
          );
          res.json({ cartoes });

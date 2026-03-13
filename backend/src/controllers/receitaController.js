@@ -32,8 +32,13 @@ class ReceitaController {
                .status(403)
                .json({ error: "Você não tem acesso a esta mesa" });
 
+         const resourceOwnerId = Number(mesa.criador_id) || Number(userId);
+
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
+            const tp = await TipoPagamento.findById(
+               tipo_pagamento_id,
+               resourceOwnerId,
+            );
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -41,7 +46,7 @@ class ReceitaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id, userId);
+            const cat = await Categoria.findById(categoria_id, resourceOwnerId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)
@@ -164,12 +169,17 @@ class ReceitaController {
                .status(403)
                .json({ error: "Você não tem acesso a esta mesa" });
 
+         const resourceOwnerId = Number(mesa.criador_id) || Number(userId);
+
          const receita = await Receita.findById(id, mesa_id);
          if (!receita)
             return res.status(404).json({ error: "Receita não encontrada" });
 
          if (tipo_pagamento_id) {
-            const tp = await TipoPagamento.findById(tipo_pagamento_id, userId);
+            const tp = await TipoPagamento.findById(
+               tipo_pagamento_id,
+               resourceOwnerId,
+            );
             if (!tp || !tp.ativa)
                return res
                   .status(400)
@@ -177,7 +187,7 @@ class ReceitaController {
          }
 
          if (categoria_id) {
-            const cat = await Categoria.findById(categoria_id, userId);
+            const cat = await Categoria.findById(categoria_id, resourceOwnerId);
             if (!cat || !cat.ativa)
                return res
                   .status(400)

@@ -165,8 +165,8 @@ export default function ReceitasPage() {
       const carregarSelects = async () => {
          try {
             const [cats, tipos] = await Promise.all([
-               categoriaService.listar("receita", false),
-               tipoPagamentoService.listar(false),
+               categoriaService.listar("receita", false, mesaSelecionada.id),
+               tipoPagamentoService.listar(false, mesaSelecionada.id),
             ]);
             setCategorias(cats);
             setTiposPagamento(tipos);
