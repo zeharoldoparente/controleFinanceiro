@@ -284,6 +284,10 @@ router.put("/:id", requireMesaWriteAccess, DespesaController.update);
  *               valor_real:
  *                 type: number
  *                 example: 148.50
+ *               mes:
+ *                 type: string
+ *                 example: 2026-03
+ *                 description: Mes de referencia quando a despesa for recorrente
  *               data_pagamento:
  *                 type: string
  *                 format: date
@@ -325,6 +329,10 @@ router.patch("/:id/pagar", upload.single("comprovante"), requireMesaWriteAccess,
  *               mesa_id:
  *                 type: integer
  *                 example: 2
+ *               escopo:
+ *                 type: string
+ *                 enum: [apenas, anteriores]
+ *                 description: Para confirmacoes de recorrentes, permite desfazer apenas este mes ou este mes e anteriores
  *     responses:
  *       200:
  *         description: Pagamento desfeito com sucesso

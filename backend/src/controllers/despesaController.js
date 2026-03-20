@@ -270,6 +270,7 @@ class DespesaController {
          const { id } = req.params;
          const userId = req.userId;
          const mesa_id = req.body.mesa_id;
+         const mes = req.body.mes;
          const data_pagamento = req.body.data_pagamento;
          const valor_real = req.body.valor_real;
          const comprovante = req.file ? req.file.filename : null;
@@ -298,17 +299,30 @@ class DespesaController {
                ? parseFloat(valor_real)
                : parseFloat(despesa.valor_provisionado);
 
-         await Despesa.marcarComoPaga(
+         const resultado = await Despesa.marcarComoPaga(
             id,
             mesa_id,
             valorReal,
             data_pagamento,
             comprovante,
+            mes,
          );
-         res.json({ message: "Despesa paga com sucesso!" });
+         res.json({ message: "Despesa paga com sucesso!", ...resultado });
       } catch (error) {
          console.error(error);
-         res.status(500).json({ error: "Erro ao marcar despesa como paga" });
+         if (error.message === "MES_REFERENCIA_OBRIGATORIO") {
+            return res.status(400).json({
+               error: "mes e obrigatorio para marcar recorrencias como pagas",
+            });
+         }
+
+         if (error.message.includes("ja confirmado")) {
+            return res.status(409).json({ error: error.message });
+         }
+
+         res.status(500).json({
+            error: error.message || "Erro ao marcar despesa como paga",
+         });
       }
    }
 
@@ -317,7 +331,7 @@ class DespesaController {
    static async desmarcarPagamento(req, res) {
       try {
          const { id } = req.params;
-         const { mesa_id } = req.body;
+         const { mesa_id, escopo } = req.body;
          const userId = req.userId;
 
          if (!mesa_id)
@@ -333,11 +347,22 @@ class DespesaController {
          if (!despesa)
             return res.status(404).json({ error: "Despesa não encontrada" });
 
-         await Despesa.desmarcarPagamento(id, mesa_id);
-         res.json({ message: "Pagamento desfeito com sucesso!" });
+         const resultado = await Despesa.desmarcarPagamento(id, mesa_id, {
+            escopo,
+         });
+
+         const message =
+            resultado.tipo === "recorrente" &&
+            resultado.escopo === "anteriores"
+               ? "Pagamentos do mes atual e anteriores foram desfeitos com sucesso!"
+               : "Pagamento desfeito com sucesso!";
+
+         res.json({ message, ...resultado });
       } catch (error) {
          console.error(error);
-         res.status(500).json({ error: "Erro ao desfazer pagamento" });
+         res.status(500).json({
+            error: error.message || "Erro ao desfazer pagamento",
+         });
       }
    }
 
@@ -364,10 +389,20 @@ class DespesaController {
          if (!despesa)
             return res.status(404).json({ error: "Despesa não encontrada" });
 
-         if (!despesa.recorrente)
+         const origemRecorrenteId = despesa.origem_recorrente_id ?? despesa.id;
+         const despesaOrigem =
+            despesa.origem_recorrente_id != null
+               ? await Despesa.findById(origemRecorrenteId, mesa_id)
+               : despesa;
+
+         if (!despesaOrigem?.recorrente)
             return res.status(400).json({ error: "Despesa não é recorrente" });
 
-         await Despesa.cancelarRecorrencia(id, mesa_id, `${mes}-01`);
+         await Despesa.cancelarRecorrencia(
+            origemRecorrenteId,
+            mesa_id,
+            `${mes}-01`,
+         );
          res.json({ message: "Recorrência cancelada com sucesso!" });
       } catch (error) {
          console.error(error);
@@ -392,7 +427,13 @@ class DespesaController {
                .status(403)
                .json({ error: "Você não tem acesso a esta mesa" });
 
-         await Despesa.removerCancelamento(id, mesa_id);
+         const despesa = await Despesa.findById(id, mesa_id);
+         if (!despesa)
+            return res.status(404).json({ error: "Despesa nÃ£o encontrada" });
+
+         const origemRecorrenteId = despesa.origem_recorrente_id ?? despesa.id;
+
+         await Despesa.removerCancelamento(origemRecorrenteId, mesa_id);
          res.json({ message: "Cancelamento removido com sucesso!" });
       } catch (error) {
          console.error(error);
@@ -438,13 +479,27 @@ class DespesaController {
             });
          }
 
-         if (escopoExclusao === "posteriores" && despesa.recorrente) {
+         const origemRecorrenteId = despesa.origem_recorrente_id ?? despesa.id;
+         const despesaOrigem =
+            despesa.origem_recorrente_id != null
+               ? await Despesa.findById(origemRecorrenteId, mesa_id)
+               : despesa;
+         const ehRecorrente =
+            !!despesaOrigem?.recorrente || despesa.origem_recorrente_id != null;
+
+         if (escopoExclusao === "posteriores" && ehRecorrente) {
             const mesValido = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes || ""));
             const mesBase = mesValido
                ? String(mes)
-               : String(despesa.data_vencimento).substring(0, 7);
+               : String(
+                    despesa.mes_referencia || despesa.data_vencimento,
+                 ).substring(0, 7);
 
-            await Despesa.cancelarRecorrencia(id, mesa_id, `${mesBase}-01`);
+            await Despesa.cancelarRecorrencia(
+               origemRecorrenteId,
+               mesa_id,
+               `${mesBase}-01`,
+            );
             return res.json({
                message: "Recorrencia cancelada a partir do mes selecionado!",
             });

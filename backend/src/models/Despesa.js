@@ -3,6 +3,34 @@ const { v4: uuidv4 } = require("uuid");
 const Fatura = require("./Fatura");
 
 class Despesa {
+   static async hasConfirmacaoRecorrenteColumns() {
+      try {
+         const [cols] = await db.query(
+            `SELECT COLUMN_NAME
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'despesas'
+               AND COLUMN_NAME IN ('origem_recorrente_id', 'mes_referencia')`,
+         );
+         return cols.length === 2;
+      } catch (_) {
+         return false;
+      }
+   }
+
+   static montarDataNoMes(dataBase, mesReferencia) {
+      const [anoMes, mesMes] = String(mesReferencia).split("-").map(Number);
+      const [, , diaBase] = String(dataBase)
+         .substring(0, 10)
+         .split("-")
+         .map(Number);
+
+      const ultimoDiaDoMes = new Date(anoMes, mesMes, 0).getDate();
+      const diaFinal = Math.min(diaBase, ultimoDiaDoMes);
+
+      return `${anoMes}-${String(mesMes).padStart(2, "0")}-${String(diaFinal).padStart(2, "0")}`;
+   }
+
    /**
     * Cria uma ou mais despesas.
     *
@@ -108,6 +136,83 @@ class Despesa {
     */
    static async findByMesaIdFiltrado(mesaId, mes) {
       const primeiroDia = `${mes}-01`;
+
+      const hasConfirmacaoRecorrente =
+         await Despesa.hasConfirmacaoRecorrenteColumns();
+
+      if (hasConfirmacaoRecorrente) {
+         const [rows] = await db.query(
+            `SELECT
+               d.*,
+               c.nome AS categoria_nome,
+               tp.nome AS tipo_pagamento_nome,
+               car.nome AS cartao_nome,
+               CASE
+                  WHEN d.origem_recorrente_id IS NOT NULL THEN TRUE
+                  ELSE d.recorrente
+               END AS recorrente,
+               CASE
+                  WHEN d.recorrente = TRUE AND d.origem_recorrente_id IS NULL THEN
+                     STR_TO_DATE(
+                        CONCAT(
+                           ?,
+                           '-',
+                           LPAD(
+                              LEAST(
+                                 DAY(d.data_vencimento),
+                                 DAY(LAST_DAY(?))
+                              ),
+                              2,
+                              '0'
+                           )
+                        ),
+                        '%Y-%m-%d'
+                     )
+                  ELSE d.data_vencimento
+               END AS data_vencimento,
+               COALESCE(orig.data_cancelamento, d.data_cancelamento) AS data_cancelamento
+             FROM despesas d
+             LEFT JOIN despesas orig      ON d.origem_recorrente_id = orig.id
+             LEFT JOIN categorias c       ON d.categoria_id = c.id
+             LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+             LEFT JOIN cartoes car        ON d.cartao_id = car.id
+             WHERE d.mesa_id = ?
+               AND d.ativa = TRUE
+               AND d.fatura_id IS NULL
+               AND (
+                  (
+                     d.recorrente = FALSE
+                     AND d.origem_recorrente_id IS NULL
+                     AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+                  )
+                  OR
+                  (
+                     d.recorrente = TRUE
+                     AND d.origem_recorrente_id IS NULL
+                     AND d.data_vencimento <= LAST_DAY(?)
+                     AND (
+                        d.data_cancelamento IS NULL
+                        OR DATE_FORMAT(d.data_cancelamento, '%Y-%m') > ?
+                     )
+                     AND NOT EXISTS (
+                        SELECT 1
+                        FROM despesas cf
+                        WHERE cf.origem_recorrente_id = d.id
+                          AND cf.mes_referencia = ?
+                          AND cf.ativa = TRUE
+                     )
+                  )
+                  OR
+                  (
+                     d.origem_recorrente_id IS NOT NULL
+                     AND d.mes_referencia = ?
+                  )
+               )
+             ORDER BY data_vencimento ASC, d.id ASC`,
+            [mes, primeiroDia, mesaId, mes, primeiroDia, mes, mes, mes],
+         );
+         return rows;
+      }
 
       const [rows] = await db.query(
          `SELECT 
@@ -241,22 +346,127 @@ class Despesa {
       valorReal,
       dataPagamento,
       comprovante,
+      mesReferencia,
    ) {
+      const despesa = await Despesa.findById(id, mesaId);
+      if (!despesa) throw new Error("Despesa nao encontrada");
+
+      const hasConfirmacaoRecorrente =
+         await Despesa.hasConfirmacaoRecorrenteColumns();
+
+      if (
+         hasConfirmacaoRecorrente &&
+         despesa.recorrente &&
+         despesa.origem_recorrente_id == null
+      ) {
+         const mes = String(mesReferencia || "").trim();
+         if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) {
+            throw new Error("MES_REFERENCIA_OBRIGATORIO");
+         }
+
+         const [existing] = await db.query(
+            `SELECT id
+             FROM despesas
+             WHERE origem_recorrente_id = ?
+               AND mes_referencia = ?
+               AND ativa = TRUE`,
+            [id, mes],
+         );
+
+         if (existing.length > 0) {
+            throw new Error("Pagamento ja confirmado para este mes");
+         }
+
+         const dataVencimentoMes = Despesa.montarDataNoMes(
+            despesa.data_vencimento,
+            mes,
+         );
+
+         const [result] = await db.query(
+            `INSERT INTO despesas
+             (mesa_id, descricao, tipo, valor_provisionado, valor_real, data_vencimento,
+              paga, data_pagamento, comprovante, categoria_id, tipo_pagamento_id,
+              cartao_id, fatura_id, recorrente, data_cancelamento, ativa, parcelas,
+              parcela_atual, parcela_grupo_id, origem_recorrente_id, mes_referencia)
+             VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, FALSE, NULL, TRUE, ?, ?, ?, ?, ?)`,
+            [
+               mesaId,
+               despesa.descricao,
+               despesa.tipo || "variavel",
+               despesa.valor_provisionado,
+               valorReal,
+               dataVencimentoMes,
+               dataPagamento,
+               comprovante,
+               despesa.categoria_id || null,
+               despesa.tipo_pagamento_id || null,
+               despesa.cartao_id || null,
+               despesa.fatura_id || null,
+               despesa.parcelas || 1,
+               despesa.parcela_atual || 1,
+               despesa.parcela_grupo_id || null,
+               id,
+               mes,
+            ],
+         );
+
+         return { tipo: "recorrente", novoId: result.insertId };
+      }
+
       await db.query(
          `UPDATE despesas 
           SET paga = TRUE, valor_real = ?, data_pagamento = ?, comprovante = ?
           WHERE id = ? AND mesa_id = ?`,
          [valorReal, dataPagamento, comprovante, id, mesaId],
       );
+
+      return { tipo: "normal" };
    }
 
-   static async desmarcarPagamento(id, mesaId) {
+   static async desmarcarPagamento(id, mesaId, options = {}) {
+      const despesa = await Despesa.findById(id, mesaId);
+      if (!despesa) throw new Error("Despesa nao encontrada");
+
+      const hasConfirmacaoRecorrente =
+         await Despesa.hasConfirmacaoRecorrenteColumns();
+
+      if (
+         hasConfirmacaoRecorrente &&
+         despesa.origem_recorrente_id != null &&
+         despesa.mes_referencia
+      ) {
+         const escopo =
+            options.escopo === "anteriores" ? "anteriores" : "apenas";
+
+         if (escopo === "anteriores") {
+            await db.query(
+               `DELETE FROM despesas
+                WHERE mesa_id = ?
+                  AND origem_recorrente_id = ?
+                  AND mes_referencia IS NOT NULL
+                  AND mes_referencia <= ?`,
+               [mesaId, despesa.origem_recorrente_id, despesa.mes_referencia],
+            );
+
+            return { tipo: "recorrente", escopo: "anteriores" };
+         }
+
+         await db.query("DELETE FROM despesas WHERE id = ? AND mesa_id = ?", [
+            id,
+            mesaId,
+         ]);
+
+         return { tipo: "recorrente", escopo: "apenas" };
+      }
+
       await db.query(
          `UPDATE despesas 
           SET paga = FALSE, valor_real = NULL, data_pagamento = NULL, comprovante = NULL
           WHERE id = ? AND mesa_id = ?`,
          [id, mesaId],
       );
+
+      return { tipo: "normal", escopo: "apenas" };
    }
 
    static async cancelarRecorrencia(id, mesaId, dataCancelamento) {

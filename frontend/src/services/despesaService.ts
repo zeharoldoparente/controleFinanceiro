@@ -14,6 +14,8 @@ export interface Despesa {
    data_cancelamento: string | null;
    paga: boolean | number;
    recorrente: boolean | number;
+   origem_recorrente_id: number | null;
+   mes_referencia: string | null;
    parcelas: number;
    parcela_atual: number;
    parcela_grupo_id: string;
@@ -70,6 +72,7 @@ const despesaService = {
    async marcarComoPaga(
       id: number,
       mesaId: number,
+      mes: string,
       valorReal?: number,
       arquivo?: File | null,
    ): Promise<void> {
@@ -79,6 +82,7 @@ const despesaService = {
       if (arquivo) {
          const form = new FormData();
          form.append("mesa_id", String(mesaId));
+         form.append("mes", mes);
          form.append("data_pagamento", hoje);
          if (valorReal !== undefined)
             form.append("valor_real", String(valorReal));
@@ -87,15 +91,21 @@ const despesaService = {
       } else {
          await api.patch(`/despesas/${id}/pagar`, {
             mesa_id: mesaId,
+            mes,
             data_pagamento: hoje,
             ...(valorReal !== undefined && { valor_real: valorReal }),
          });
       }
    },
 
-   async desmarcarPagamento(id: number, mesaId: number): Promise<void> {
+   async desmarcarPagamento(
+      id: number,
+      mesaId: number,
+      options?: { escopo?: "apenas" | "anteriores" },
+   ): Promise<void> {
       await api.patch(`/despesas/${id}/desfazer-pagamento`, {
          mesa_id: mesaId,
+         ...(options?.escopo && { escopo: options.escopo }),
       });
    },
 

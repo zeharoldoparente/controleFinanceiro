@@ -260,6 +260,8 @@ CREATE TABLE despesas (
   parcelas INT DEFAULT NULL COMMENT 'Número total de parcelas',
   parcela_atual INT DEFAULT NULL COMMENT 'Parcela atual (1, 2, 3...)',
   parcela_grupo_id VARCHAR(36) DEFAULT NULL COMMENT 'UUID para agrupar parcelas de uma mesma compra',
+  origem_recorrente_id INT DEFAULT NULL COMMENT 'ID da despesa recorrente mÃ£e (para confirmaÃ§Ãµes mensais)',
+  mes_referencia VARCHAR(7) DEFAULT NULL COMMENT 'YYYY-MM do mÃªs pago (para recorrentes)',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -278,7 +280,9 @@ CREATE TABLE despesas (
   INDEX idx_recorrente (recorrente),
   INDEX idx_cancelamento (data_cancelamento),
   INDEX idx_ativa (ativa),
-  INDEX idx_parcela_grupo (parcela_grupo_id)
+  INDEX idx_parcela_grupo (parcela_grupo_id),
+  INDEX idx_origem_recorrente (origem_recorrente_id),
+  INDEX idx_mes_referencia (mes_referencia)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================

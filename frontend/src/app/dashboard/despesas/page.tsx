@@ -60,7 +60,20 @@ type StatusDespesa = "paga" | "a_vencer" | "vencida";
 type FiltroStatus = "todas" | StatusDespesa;
 type FiltroTipo = "todas" | TipoDespesa | "cartao";
 type EscopoExclusao = "apenas" | "posteriores";
+type EscopoDesfazer = "apenas" | "anteriores";
 type ResumoParcelas = { total: number; realizado: number };
+
+function isDespesaRecorrente(d: Despesa): boolean {
+   return !!d.recorrente || d.origem_recorrente_id != null;
+}
+
+function isConfirmacaoRecorrente(d: Despesa): boolean {
+   return d.origem_recorrente_id != null;
+}
+
+function getMesReferenciaDespesa(d: Despesa): string {
+   return d.mes_referencia || String(d.data_vencimento).substring(0, 7);
+}
 
 function getStatus(d: Despesa): StatusDespesa {
    if (d.paga) return "paga";
@@ -156,6 +169,8 @@ export default function DespesasPage() {
 
    const [modalDesfazer, setModalDesfazer] = useState<Despesa | null>(null);
    const [loadingDesfazer, setLoadingDesfazer] = useState(false);
+   const [escopoDesfazer, setEscopoDesfazer] =
+      useState<EscopoDesfazer>("apenas");
 
    const [modalCancelar, setModalCancelar] = useState<Despesa | null>(null);
    const [loadingCancelar, setLoadingCancelar] = useState(false);
@@ -458,7 +473,7 @@ export default function DespesasPage() {
    };
 
    const podeExcluirPosterioresDespesa = (despesa: Despesa): boolean => {
-      const ehRecorrente = !!despesa.recorrente;
+      const ehRecorrente = isDespesaRecorrente(despesa);
       const ehParceladaComPosteriores =
          despesa.parcelas > 1 && despesa.parcela_atual < despesa.parcelas;
       return ehRecorrente || ehParceladaComPosteriores;
@@ -518,6 +533,17 @@ export default function DespesasPage() {
       setArquivoComprovante(null);
    };
 
+   const abrirModalDesfazer = (despesa: Despesa) => {
+      setModalDesfazer(despesa);
+      setEscopoDesfazer("apenas");
+      setErro("");
+   };
+
+   const fecharModalDesfazer = () => {
+      setModalDesfazer(null);
+      setEscopoDesfazer("apenas");
+   };
+
    const confirmarPagamento = async () => {
       if (!modalPagamento || !mesaSelecionada) return;
       const val = parseFloat(valorRealInput);
@@ -530,6 +556,7 @@ export default function DespesasPage() {
          await despesaService.marcarComoPaga(
             modalPagamento.id,
             mesaSelecionada.id,
+            getMesReferenciaDespesa(modalPagamento),
             val,
             arquivoComprovante,
          );
@@ -599,9 +626,17 @@ export default function DespesasPage() {
          await despesaService.desmarcarPagamento(
             modalDesfazer.id,
             mesaSelecionada.id,
+            isConfirmacaoRecorrente(modalDesfazer)
+               ? { escopo: escopoDesfazer }
+               : undefined,
          );
-         setSucesso("Pagamento desfeito com sucesso!");
-         setModalDesfazer(null);
+         setSucesso(
+            isConfirmacaoRecorrente(modalDesfazer) &&
+               escopoDesfazer === "anteriores"
+               ? "Pagamento deste mês e dos anteriores desfeito com sucesso!"
+               : "Pagamento desfeito com sucesso!",
+         );
+         fecharModalDesfazer();
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
       } catch {
@@ -1131,7 +1166,7 @@ export default function DespesasPage() {
                               d={item.data}
                               onDetalhe={abrirDetalhe}
                               onPagar={abrirModalPagamento}
-                              onDesfazer={(d) => setModalDesfazer(d)}
+                              onDesfazer={abrirModalDesfazer}
                               onCancelar={(d) => setModalCancelar(d)}
                               onReativar={(d) =>
                                  despesaService
@@ -1195,7 +1230,7 @@ export default function DespesasPage() {
                                        d={item.data}
                                        onDetalhe={abrirDetalhe}
                                        onPagar={abrirModalPagamento}
-                                       onDesfazer={(d) => setModalDesfazer(d)}
+                                       onDesfazer={abrirModalDesfazer}
                                        onCancelar={(d) => setModalCancelar(d)}
                                        onReativar={(d) =>
                                           despesaService
@@ -2025,12 +2060,37 @@ export default function DespesasPage() {
                      <p className="text-sm text-gray-500 mb-1 font-medium truncate px-2">
                         {modalDesfazer.descricao}
                      </p>
-                     <p className="text-xs text-gray-400 mb-5">
+                     <p className="text-xs text-gray-400 mb-3">
                         O valor real e comprovante serao removidos.
                      </p>
+                     {isConfirmacaoRecorrente(modalDesfazer) && (
+                        <div className="mb-5 text-left">
+                           <p className="text-xs font-medium text-gray-600 mb-2">
+                              Escolha o alcance
+                           </p>
+                           <div className="space-y-2">
+                              <button
+                                 type="button"
+                                 onClick={() => setEscopoDesfazer("apenas")}
+                                 className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${escopoDesfazer === "apenas" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"}`}
+                              >
+                                 Apenas este mes
+                              </button>
+                              <button
+                                 type="button"
+                                 onClick={() =>
+                                    setEscopoDesfazer("anteriores")
+                                 }
+                                 className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${escopoDesfazer === "anteriores" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"}`}
+                              >
+                                 Este mes e anteriores
+                              </button>
+                           </div>
+                        </div>
+                     )}
                      <div className="flex gap-3">
                         <button
-                           onClick={() => setModalDesfazer(null)}
+                           onClick={fecharModalDesfazer}
                            className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
                         >
                            Cancelar
@@ -2213,7 +2273,7 @@ export default function DespesasPage() {
                               </button>
                            </div>
                            <p className="text-[11px] text-gray-400 mt-2">
-                              {modalExcluir.recorrente
+                              {isDespesaRecorrente(modalExcluir)
                                  ? "Para recorrentes, remove a ocorrencia do mes selecionado em diante."
                                  : "Para parceladas, remove da parcela atual em diante."}
                            </p>
@@ -2267,7 +2327,7 @@ function DespesaCardMobile({
 }) {
    const status = getStatus(d);
    const isPaga = status === "paga";
-   const isRecorrente = !!d.recorrente;
+   const isRecorrente = isDespesaRecorrente(d);
    const isCancelada = !!d.data_cancelamento;
 
    return (
@@ -2651,7 +2711,7 @@ function DespesaRowDesktop({
 }) {
    const isPaga = getStatus(d) === "paga";
    const status = getStatus(d);
-   const isRecorrente = !!d.recorrente;
+   const isRecorrente = isDespesaRecorrente(d);
    const isCancelada = !!d.data_cancelamento;
 
    return (
@@ -2917,7 +2977,7 @@ function ModalDetalheDespesa({
                      >
                         {LABEL_TIPO[despesa.tipo]}
                      </span>
-                     {!!despesa.recorrente && (
+                     {isDespesaRecorrente(despesa) && (
                         <span className="text-xs text-gray-400">
                            🔄 Recorrente
                         </span>
@@ -3046,7 +3106,7 @@ function ModalDetalheDespesa({
                      </p>
                   </div>
                )}
-               {!!despesa.recorrente && (
+               {isDespesaRecorrente(despesa) && (
                   <div
                      className={`rounded-xl p-3 flex items-center justify-between gap-2 ${despesa.data_cancelamento ? "bg-gray-100" : "bg-green-50"}`}
                   >
