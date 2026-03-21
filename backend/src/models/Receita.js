@@ -20,6 +20,20 @@ class Receita {
                   "ALTER TABLE receitas ADD COLUMN comprovante VARCHAR(255) DEFAULT NULL COMMENT 'Nome do arquivo de comprovante' AFTER data_confirmacao",
                );
             }
+
+            const [redistribuicaoColumn] = await db.query(
+               `SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'receitas'
+                  AND COLUMN_NAME = 'redistribuicao_json'`,
+            );
+
+            if (redistribuicaoColumn.length === 0) {
+               await db.query(
+                  "ALTER TABLE receitas ADD COLUMN redistribuicao_json TEXT NULL COMMENT 'Historico da redistribuicao aplicada em recebimentos parciais' AFTER comprovante",
+               );
+            }
          })().catch((error) => {
             this.schemaPromise = null;
             throw error;
@@ -42,6 +56,18 @@ class Receita {
       return Array.from({ length: quantidade }, (_, index) =>
          base + (index < resto ? 1 : 0),
       );
+   }
+
+   static parseRedistribuicao(value) {
+      if (!value) return null;
+
+      try {
+         const parsed = JSON.parse(String(value));
+         if (!Array.isArray(parsed?.parcelas)) return null;
+         return parsed;
+      } catch (_) {
+         return null;
+      }
    }
 
    static async buscarParcelasPendentesPosteriores(
@@ -327,9 +353,20 @@ class Receita {
 
             await connection.query(
                `UPDATE receitas
-                SET valor = ?, status = 'recebida', valor_real = ?, data_confirmacao = CURDATE(), comprovante = ?
+                SET status = 'recebida', valor_real = ?, data_confirmacao = CURDATE(), comprovante = ?, redistribuicao_json = ?
                 WHERE id = ? AND mesa_id = ?`,
-               [valorConfirmado, valorConfirmado, comprovante, id, mesaId],
+               [
+                  valorConfirmado,
+                  comprovante,
+                  ajusteRestante === "redistribuir"
+                     ? JSON.stringify({
+                          tipo: "redistribuir",
+                          parcelas: [],
+                       })
+                     : null,
+                  id,
+                  mesaId,
+               ],
             );
 
             if (
@@ -341,6 +378,7 @@ class Receita {
                   diferencaCentavos,
                   parcelasPendentes.length,
                );
+               const redistribuicaoDetalhes = [];
 
                for (let index = 0; index < parcelasPendentes.length; index += 1) {
                   const parcela = parcelasPendentes[index];
@@ -350,11 +388,30 @@ class Receita {
 
                   await connection.query(
                      `UPDATE receitas
-                      SET valor = ?
-                      WHERE id = ? AND mesa_id = ?`,
+                     SET valor = ?
+                     WHERE id = ? AND mesa_id = ?`,
                      [novoValor, parcela.id, mesaId],
                   );
-               }
+
+                  redistribuicaoDetalhes.push({
+                     id: parcela.id,
+                     incremento_centavos: distribuicao[index],
+                  });
+                }
+
+               await connection.query(
+                  `UPDATE receitas
+                   SET redistribuicao_json = ?
+                   WHERE id = ? AND mesa_id = ?`,
+                  [
+                     JSON.stringify({
+                        tipo: "redistribuir",
+                        parcelas: redistribuicaoDetalhes,
+                     }),
+                     id,
+                     mesaId,
+                  ],
+               );
             }
 
             await connection.commit();
@@ -367,7 +424,7 @@ class Receita {
 
          await connection.query(
             `UPDATE receitas
-             SET status = 'recebida', valor_real = ?, data_confirmacao = CURDATE(), comprovante = ?
+             SET status = 'recebida', valor_real = ?, data_confirmacao = CURDATE(), comprovante = ?, redistribuicao_json = NULL
              WHERE id = ? AND mesa_id = ?`,
             [valorConfirmado, comprovante, id, mesaId],
          );
@@ -394,12 +451,58 @@ class Receita {
             mesaId,
          ]);
       } else {
-         await db.query(
-            `UPDATE receitas
-             SET status = 'a_receber', valor_real = NULL, data_confirmacao = NULL, comprovante = NULL
-             WHERE id = ? AND mesa_id = ?`,
-            [id, mesaId],
-         );
+         const connection = await db.getConnection();
+
+         try {
+            await connection.beginTransaction();
+
+            const redistribuicao = Receita.parseRedistribuicao(
+               receita.redistribuicao_json,
+            );
+
+            if (redistribuicao?.tipo === "redistribuir") {
+               for (const parcela of redistribuicao.parcelas) {
+                  const [rows] = await connection.query(
+                     `SELECT id, valor, status, ativa
+                      FROM receitas
+                      WHERE id = ? AND mesa_id = ?`,
+                     [parcela.id, mesaId],
+                  );
+
+                  const destino = rows[0];
+                  if (!destino || !destino.ativa || destino.status !== "a_receber") {
+                     throw new Error(
+                        "Nao foi possivel reverter a redistribuicao porque uma das parcelas seguintes ja foi alterada",
+                     );
+                  }
+
+                  const novoValor =
+                     parseFloat(String(destino.valor ?? 0)) -
+                     Number(parcela.incremento_centavos || 0) / 100;
+
+                  await connection.query(
+                     `UPDATE receitas
+                      SET valor = ?
+                      WHERE id = ? AND mesa_id = ?`,
+                     [novoValor, destino.id, mesaId],
+                  );
+               }
+            }
+
+            await connection.query(
+               `UPDATE receitas
+                SET status = 'a_receber', valor_real = NULL, data_confirmacao = NULL, comprovante = NULL, redistribuicao_json = NULL
+                WHERE id = ? AND mesa_id = ?`,
+               [id, mesaId],
+            );
+
+            await connection.commit();
+         } catch (error) {
+            await connection.rollback();
+            throw error;
+         } finally {
+            connection.release();
+         }
       }
    }
 

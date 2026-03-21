@@ -280,10 +280,10 @@ export default function ReceitasPage() {
       const ativas = grupo.filter((r) => Boolean(r.ativa));
       const base = ativas.length > 0 ? ativas : grupo;
 
-      const total = base.reduce(
-         (acc, r) => acc + parseFloat(String(r.valor ?? 0)),
-         0,
-      );
+      const total = base.reduce((acc, r) => {
+         const valorConsiderado = isConfirmada(r) ? r.valor_real ?? r.valor : r.valor;
+         return acc + parseFloat(String(valorConsiderado ?? 0));
+      }, 0);
       const realizado = base.reduce((acc, r) => {
          if (r.status !== "recebida") return acc;
          const valorRealizado = r.valor_real ?? r.valor;

@@ -326,12 +326,17 @@ class ReceitaController {
                .json({ error: "Receita nao esta confirmada" });
          }
 
-         removerArquivoSeExistir(receita.comprovante);
          await Receita.desfazerConfirmacao(id, mesa_id);
+         removerArquivoSeExistir(receita.comprovante);
          res.json({ message: "Confirmacao desfeita com sucesso!" });
       } catch (error) {
          console.error(error);
-         res.status(500).json({ error: "Erro ao desfazer confirmacao" });
+         const status = error.message?.includes("Nao foi possivel reverter")
+            ? 400
+            : 500;
+         res.status(status).json({
+            error: error.message || "Erro ao desfazer confirmacao",
+         });
       }
    }
 
