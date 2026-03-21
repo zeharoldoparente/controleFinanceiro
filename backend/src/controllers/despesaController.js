@@ -7,6 +7,19 @@ const path = require("path");
 const fs = require("fs");
 
 const uploadDir = path.resolve(__dirname, "../../uploads");
+const uploadBaseDirs = [
+   uploadDir,
+   path.resolve(__dirname, "../../uploads/comprovantes"),
+   path.resolve(__dirname, "../uploads"),
+   path.resolve(__dirname, "../uploads/comprovantes"),
+   path.resolve(__dirname, "../../../uploads"),
+   path.resolve(__dirname, "../../../uploads/comprovantes"),
+];
+
+function caminhoSeguroDentroDaBase(baseDir, caminhoArquivo) {
+   const relativo = path.relative(baseDir, caminhoArquivo);
+   return relativo && !relativo.startsWith("..") && !path.isAbsolute(relativo);
+}
 
 function resolveComprovantePath(comprovante) {
    const valorOriginal = String(comprovante ?? "").trim();
@@ -40,12 +53,14 @@ function resolveComprovantePath(comprovante) {
 
       if (path.isAbsolute(candidato)) {
          const absoluto = path.normalize(candidato);
-         if (
-            absoluto.startsWith(uploadDir) &&
-            fs.existsSync(absoluto) &&
-            fs.statSync(absoluto).isFile()
-         ) {
-            return absoluto;
+         for (const baseDir of uploadBaseDirs) {
+            if (
+               caminhoSeguroDentroDaBase(baseDir, absoluto) &&
+               fs.existsSync(absoluto) &&
+               fs.statSync(absoluto).isFile()
+            ) {
+               return absoluto;
+            }
          }
       }
 
@@ -63,13 +78,15 @@ function resolveComprovantePath(comprovante) {
 
       if (relativo.length === 0) continue;
 
-      const resolvido = path.resolve(uploadDir, ...relativo);
-      if (
-         resolvido.startsWith(uploadDir) &&
-         fs.existsSync(resolvido) &&
-         fs.statSync(resolvido).isFile()
-      ) {
-         return resolvido;
+      for (const baseDir of uploadBaseDirs) {
+         const resolvido = path.resolve(baseDir, ...relativo);
+         if (
+            caminhoSeguroDentroDaBase(baseDir, resolvido) &&
+            fs.existsSync(resolvido) &&
+            fs.statSync(resolvido).isFile()
+         ) {
+            return resolvido;
+         }
       }
    }
 
