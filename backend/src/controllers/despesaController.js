@@ -497,9 +497,9 @@ class DespesaController {
             const mesValido = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes || ""));
             const mesBase = mesValido
                ? String(mes)
-               : String(
+               : Despesa.formatMonthReference(
                     despesa.mes_referencia || despesa.data_vencimento,
-                 ).substring(0, 7);
+                 );
 
             await Despesa.cancelarRecorrencia(
                origemRecorrenteId,

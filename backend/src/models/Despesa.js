@@ -69,7 +69,7 @@ class Despesa {
 
    static montarDataNoMes(dataBase, mesReferencia) {
       const [anoMes, mesMes] = String(mesReferencia).split("-").map(Number);
-      const [, , diaBase] = String(dataBase)
+      const [, , diaBase] = Despesa.formatDateOnly(dataBase)
          .substring(0, 10)
          .split("-")
          .map(Number);
@@ -78,6 +78,28 @@ class Despesa {
       const diaFinal = Math.min(diaBase, ultimoDiaDoMes);
 
       return `${anoMes}-${String(mesMes).padStart(2, "0")}-${String(diaFinal).padStart(2, "0")}`;
+   }
+
+   static formatDateOnly(value) {
+      if (value instanceof Date) {
+         return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
+      }
+
+      const text = String(value ?? "").trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+         return text.substring(0, 10);
+      }
+
+      const parsed = new Date(text);
+      if (!Number.isNaN(parsed.getTime())) {
+         return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, "0")}-${String(parsed.getUTCDate()).padStart(2, "0")}`;
+      }
+
+      return text;
+   }
+
+   static formatMonthReference(value) {
+      return Despesa.formatDateOnly(value).substring(0, 7);
    }
 
    /**
@@ -670,7 +692,7 @@ class Despesa {
                [
                   mesaId,
                   despesa.parcela_grupo_id,
-                  String(despesa.data_vencimento).substring(0, 7),
+                  Despesa.formatMonthReference(despesa.data_vencimento),
                ],
             );
 
