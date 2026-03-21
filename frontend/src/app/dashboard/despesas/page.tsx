@@ -62,6 +62,7 @@ type FiltroTipo = "todas" | TipoDespesa | "cartao";
 type EscopoExclusao = "apenas" | "posteriores";
 type EscopoDesfazer = "apenas" | "anteriores";
 type ResumoParcelas = { total: number; realizado: number };
+type TipoVisualizacaoComprovante = "imagem" | "pdf" | "arquivo";
 
 function isDespesaRecorrente(d: Despesa): boolean {
    return !!d.recorrente || d.origem_recorrente_id != null;
@@ -73,6 +74,31 @@ function isConfirmacaoRecorrente(d: Despesa): boolean {
 
 function getMesReferenciaDespesa(d: Despesa): string {
    return d.mes_referencia || String(d.data_vencimento).substring(0, 7);
+}
+
+function getExtensaoArquivo(nomeArquivo: string | null | undefined): string {
+   const nome = String(nomeArquivo ?? "").trim().toLowerCase();
+   const semQuery = nome.split("?")[0].split("#")[0];
+   const basename = semQuery.split("/").pop() ?? semQuery;
+   const partes = basename.split(".");
+   return partes.length > 1 ? partes[partes.length - 1] : "";
+}
+
+function getTipoVisualizacaoComprovante(
+   mimeType: string | null,
+   nomeArquivo: string | null | undefined,
+): TipoVisualizacaoComprovante {
+   const mime = String(mimeType ?? "").toLowerCase();
+   if (mime.startsWith("image/")) return "imagem";
+   if (mime === "application/pdf") return "pdf";
+
+   const extensao = getExtensaoArquivo(nomeArquivo);
+   if (["jpg", "jpeg", "png", "gif", "webp", "bmp"].includes(extensao)) {
+      return "imagem";
+   }
+   if (extensao === "pdf") return "pdf";
+
+   return "arquivo";
 }
 
 function getStatus(d: Despesa): StatusDespesa {
@@ -177,6 +203,9 @@ export default function DespesasPage() {
 
    const [modalDetalhe, setModalDetalhe] = useState<Despesa | null>(null);
    const [comprovanteUrl, setComprovanteUrl] = useState<string | null>(null);
+   const [comprovanteMimeType, setComprovanteMimeType] = useState<string | null>(
+      null,
+   );
    const [loadingComprovante, setLoadingComprovante] = useState(false);
    const [resumoParcelasDetalhe, setResumoParcelasDetalhe] =
       useState<ResumoParcelas | null>(null);
@@ -691,6 +720,7 @@ export default function DespesasPage() {
    const abrirDetalhe = async (despesa: Despesa) => {
       setModalDetalhe(despesa);
       setComprovanteUrl(null);
+      setComprovanteMimeType(null);
       setResumoParcelasDetalhe(null);
 
       if (despesa.parcelas > 1 && despesa.parcela_grupo_id && mesaSelecionada) {
@@ -722,16 +752,18 @@ export default function DespesasPage() {
          }
       }
 
-      if (despesa.comprovante && mesaSelecionada) {
+      if ((despesa.paga || despesa.comprovante) && mesaSelecionada) {
          setLoadingComprovante(true);
          try {
-            const url = await despesaService.getComprovanteUrl(
+            const comprovante = await despesaService.getComprovanteUrl(
                despesa.id,
                mesaSelecionada.id,
             );
-            setComprovanteUrl(url);
+            setComprovanteUrl(comprovante.url);
+            setComprovanteMimeType(comprovante.mimeType);
          } catch {
-            // comprovante não disponível
+            setComprovanteUrl(null);
+            setComprovanteMimeType(null);
          } finally {
             setLoadingComprovante(false);
          }
@@ -742,6 +774,7 @@ export default function DespesasPage() {
       if (comprovanteUrl) URL.revokeObjectURL(comprovanteUrl);
       setModalDetalhe(null);
       setComprovanteUrl(null);
+      setComprovanteMimeType(null);
       setResumoParcelasDetalhe(null);
       setLoadingResumoParcelasDetalhe(false);
    };
@@ -1863,6 +1896,7 @@ export default function DespesasPage() {
                despesa={modalDetalhe}
                onClose={fecharDetalhe}
                comprovanteUrl={comprovanteUrl}
+               comprovanteMimeType={comprovanteMimeType}
                loadingComprovante={loadingComprovante}
                resumoParcelas={resumoParcelasDetalhe}
                loadingResumoParcelas={loadingResumoParcelasDetalhe}
@@ -2946,6 +2980,7 @@ function ModalDetalheDespesa({
    despesa,
    onClose,
    comprovanteUrl,
+   comprovanteMimeType,
    loadingComprovante,
    resumoParcelas,
    loadingResumoParcelas,
@@ -2956,6 +2991,7 @@ function ModalDetalheDespesa({
    despesa: Despesa;
    onClose: () => void;
    comprovanteUrl: string | null;
+   comprovanteMimeType: string | null;
    loadingComprovante: boolean;
    resumoParcelas: ResumoParcelas | null;
    loadingResumoParcelas: boolean;
@@ -2964,6 +3000,10 @@ function ModalDetalheDespesa({
    onReativar: (d: Despesa) => void;
 }) {
    const status = getStatus(despesa);
+   const tipoComprovante = getTipoVisualizacaoComprovante(
+      comprovanteMimeType,
+      despesa.comprovante,
+   );
    return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] sm:max-h-[90vh] overflow-y-auto">
@@ -3179,19 +3219,46 @@ function ModalDetalheDespesa({
                      </div>
                   ) : comprovanteUrl ? (
                      <div className="space-y-3">
-                        <div className="rounded-xl overflow-hidden border border-gray-200">
-                           <a
-                              href={comprovanteUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                           >
-                              <img
+                        {tipoComprovante === "imagem" ? (
+                           <div className="rounded-xl overflow-hidden border border-gray-200">
+                              <a
+                                 href={comprovanteUrl}
+                                 target="_blank"
+                                 rel="noreferrer"
+                              >
+                                 <img
+                                    src={comprovanteUrl}
+                                    alt="Comprovante"
+                                    className="w-full max-h-64 object-contain bg-gray-50"
+                                 />
+                              </a>
+                           </div>
+                        ) : tipoComprovante === "pdf" ? (
+                           <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                              <iframe
                                  src={comprovanteUrl}
-                                 alt="Comprovante"
-                                 className="w-full max-h-64 object-contain bg-gray-50"
+                                 title={`Comprovante da despesa ${despesa.id}`}
+                                 className="w-full h-80"
                               />
-                           </a>
-                        </div>
+                           </div>
+                        ) : (
+                           <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-5 text-center">
+                              <p className="text-sm font-medium text-gray-700">
+                                 Arquivo anexado com sucesso
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500">
+                                 Abra em nova aba ou baixe o comprovante abaixo.
+                              </p>
+                           </div>
+                        )}
+                        <a
+                           href={comprovanteUrl}
+                           target="_blank"
+                           rel="noreferrer"
+                           className="inline-flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                        >
+                           Abrir comprovante
+                        </a>
                         <a
                            href={comprovanteUrl}
                            download={`comprovante-despesa-${despesa.id}`}

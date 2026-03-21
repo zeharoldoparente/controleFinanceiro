@@ -24,13 +24,16 @@ const fileFilter = (req, file, cb) => {
       "image/png",
       "image/gif",
       "image/webp",
+      "application/pdf",
    ];
 
    if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
    } else {
       cb(
-         new Error("Tipo de arquivo inválido. Apenas imagens são permitidas."),
+         new Error(
+            "Tipo de arquivo invalido. Apenas imagens e PDF sao permitidos.",
+         ),
          false,
       );
    }

@@ -43,6 +43,11 @@ export interface DespesaCreate {
    parcelas?: number;
 }
 
+export interface ComprovanteDespesa {
+   url: string;
+   mimeType: string | null;
+}
+
 const despesaService = {
    async listar(mesaId: number, mes?: string): Promise<Despesa[]> {
       const params: Record<string, string> = { mesa_id: String(mesaId) };
@@ -109,12 +114,18 @@ const despesaService = {
       });
    },
 
-   async getComprovanteUrl(id: number, mesaId: number): Promise<string> {
+   async getComprovanteUrl(
+      id: number,
+      mesaId: number,
+   ): Promise<ComprovanteDespesa> {
       const res = await api.get(`/despesas/${id}/comprovante/download`, {
          params: { mesa_id: mesaId },
          responseType: "blob",
       });
-      return URL.createObjectURL(res.data);
+      return {
+         url: URL.createObjectURL(res.data),
+         mimeType: res.data?.type || res.headers["content-type"] || null,
+      };
    },
 
    async cancelarRecorrencia(

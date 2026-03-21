@@ -6,6 +6,76 @@ const Cartao = require("../models/Cartao");
 const path = require("path");
 const fs = require("fs");
 
+const uploadDir = path.resolve(__dirname, "../../uploads");
+
+function resolveComprovantePath(comprovante) {
+   const valorOriginal = String(comprovante ?? "").trim();
+   if (!valorOriginal) return null;
+
+   const candidatos = new Set();
+   const adicionarCandidato = (valor) => {
+      if (valor) candidatos.add(String(valor).trim());
+   };
+
+   adicionarCandidato(valorOriginal);
+
+   const normalizado = valorOriginal
+      .replace(/\\/g, "/")
+      .split("?")[0]
+      .split("#")[0];
+
+   adicionarCandidato(normalizado);
+   adicionarCandidato(path.basename(normalizado));
+
+   try {
+      const url = new URL(normalizado);
+      adicionarCandidato(url.pathname);
+      adicionarCandidato(path.basename(url.pathname));
+   } catch (_) {
+      // Ignora quando o valor salvo nao eh uma URL completa.
+   }
+
+   for (const candidato of candidatos) {
+      if (!candidato) continue;
+
+      if (path.isAbsolute(candidato)) {
+         const absoluto = path.normalize(candidato);
+         if (
+            absoluto.startsWith(uploadDir) &&
+            fs.existsSync(absoluto) &&
+            fs.statSync(absoluto).isFile()
+         ) {
+            return absoluto;
+         }
+      }
+
+      const partes = candidato
+         .replace(/\\/g, "/")
+         .replace(/^\/+/, "")
+         .split("/")
+         .filter(Boolean);
+
+      if (partes.length === 0) continue;
+
+      const uploadIndex = partes.lastIndexOf("uploads");
+      const relativo =
+         uploadIndex >= 0 ? partes.slice(uploadIndex + 1) : partes;
+
+      if (relativo.length === 0) continue;
+
+      const resolvido = path.resolve(uploadDir, ...relativo);
+      if (
+         resolvido.startsWith(uploadDir) &&
+         fs.existsSync(resolvido) &&
+         fs.statSync(resolvido).isFile()
+      ) {
+         return resolvido;
+      }
+   }
+
+   return null;
+}
+
 class DespesaController {
    // ─── CREATE ───────────────────────────────────────────────────────────────
 
@@ -642,11 +712,11 @@ class DespesaController {
                .status(404)
                .json({ error: "Comprovante não encontrado" });
 
-         const filePath = path.resolve(__dirname, "../../uploads", comprovante);
-         if (!fs.existsSync(filePath))
+         const filePath = resolveComprovantePath(comprovante);
+         if (!filePath)
             return res.status(404).json({ error: "Arquivo não encontrado" });
 
-         res.download(filePath);
+         res.sendFile(filePath);
       } catch (error) {
          console.error(error);
          res.status(500).json({ error: "Erro ao baixar comprovante" });
@@ -670,8 +740,8 @@ class DespesaController {
 
          const comprovante = await Despesa.getComprovante(id, mesa_id);
          if (comprovante) {
-            const filePath = path.resolve(__dirname, "../../uploads", comprovante);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            const filePath = resolveComprovantePath(comprovante);
+            if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
          }
 
          await Despesa.removerComprovante(id, mesa_id);
