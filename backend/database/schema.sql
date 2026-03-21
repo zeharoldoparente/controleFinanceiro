@@ -331,7 +331,7 @@ CREATE TABLE notificacoes (
 
 -- ============================================================
 -- TABELA: ian_planos
--- Descricao: Plano ativo e acompanhamento persistido do IAn por mesa
+-- Descricao: Plano ativo e acompanhamento persistido do IAn por mesa compartilhada
 -- ============================================================
 CREATE TABLE ian_planos (
   id INT PRIMARY KEY AUTO_INCREMENT,

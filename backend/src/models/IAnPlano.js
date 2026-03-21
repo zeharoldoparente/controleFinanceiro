@@ -52,16 +52,16 @@ class IAnPlano {
       };
    }
 
-   static async findActiveByUserAndMesa(userId, mesaId) {
+   static async findActiveByMesa(mesaId) {
       await this.ensureTable();
 
       const [rows] = await db.query(
          `SELECT *
           FROM ian_planos
-          WHERE user_id = ? AND mesa_id = ? AND ativo = 1
+          WHERE mesa_id = ? AND ativo = 1
           ORDER BY updated_at DESC
           LIMIT 1`,
-         [userId, mesaId],
+         [mesaId],
       );
 
       return this.parseRow(rows[0]);
@@ -72,13 +72,22 @@ class IAnPlano {
 
       const [rows] = await db.query(
          `SELECT *
-          FROM ian_planos
-          WHERE user_id = ? AND ativo = 1
+          FROM ian_planos ip
+          INNER JOIN mesa_usuarios mu ON mu.mesa_id = ip.mesa_id
+          WHERE mu.user_id = ? AND ip.ativo = 1
           ORDER BY updated_at DESC`,
          [userId],
       );
 
-      return rows.map((row) => this.parseRow(row)).filter(Boolean);
+      const unicos = new Map();
+      for (const row of rows) {
+         const parsed = this.parseRow(row);
+         if (parsed && !unicos.has(parsed.mesa_id)) {
+            unicos.set(parsed.mesa_id, parsed);
+         }
+      }
+
+      return Array.from(unicos.values());
    }
 
    static async saveActive({
@@ -91,17 +100,17 @@ class IAnPlano {
       await this.ensureTable();
 
       const planoJson = JSON.stringify(plano);
-      const existente = await this.findActiveByUserAndMesa(userId, mesaId);
+      const existente = await this.findActiveByMesa(mesaId);
 
       if (existente?.id) {
          await db.query(
             `UPDATE ian_planos
-             SET objetivo_descricao = ?, estrategia_id = ?, plano_json = ?, ativo = 1
+             SET user_id = ?, objetivo_descricao = ?, estrategia_id = ?, plano_json = ?, ativo = 1
              WHERE id = ?`,
-            [objetivoDescricao, estrategiaId, planoJson, existente.id],
+            [userId, objetivoDescricao, estrategiaId, planoJson, existente.id],
          );
 
-         return this.findActiveByUserAndMesa(userId, mesaId);
+         return this.findActiveByMesa(mesaId);
       }
 
       await db.query(
@@ -111,7 +120,7 @@ class IAnPlano {
          [userId, mesaId, objetivoDescricao, estrategiaId, planoJson],
       );
 
-      return this.findActiveByUserAndMesa(userId, mesaId);
+      return this.findActiveByMesa(mesaId);
    }
 }
 

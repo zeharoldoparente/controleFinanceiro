@@ -51,6 +51,19 @@ function getStrategyFromPlan(planoSalvo) {
    );
 }
 
+async function getMesaUserIds(mesaId) {
+   const [rows] = await db.query(
+      `SELECT user_id
+       FROM mesa_usuarios
+       WHERE mesa_id = ?`,
+      [mesaId],
+   );
+
+   return rows
+      .map((row) => Number(row.user_id))
+      .filter((userId) => Number.isInteger(userId) && userId > 0);
+}
+
 async function getCategoryTracking(mesaId, categoryNames) {
    if (!categoryNames.length) return { currentMap: {}, averageMap: {} };
 
@@ -308,7 +321,7 @@ async function buildAcompanhamento(planoSalvo) {
 }
 
 async function getPlanoAtivoComAcompanhamento(userId, mesaId) {
-   const planoSalvo = await IAnPlano.findActiveByUserAndMesa(userId, mesaId);
+   const planoSalvo = await IAnPlano.findActiveByMesa(mesaId);
    if (!planoSalvo) return null;
 
    const acompanhamento = await buildAcompanhamento(planoSalvo);
@@ -337,69 +350,73 @@ async function verificarAcompanhamentosIAn(userId) {
 
       const strategy = getStrategyFromPlan(plano);
       if (!strategy) continue;
+      const membros = await getMesaUserIds(plano.mesa_id);
+      if (!membros.length) continue;
 
       const todayRef = getTodayDate();
       const weekRef = getWeekReference();
       const monthRef = getCurrentMonth();
 
-      if (acompanhamento.alertas.diarios[0]) {
-         await Notificacao.createComReferencia(
-            userId,
-            `ian_diario_${plano.id}_${todayRef}`,
-            "alerta_financeiro",
-            `IAn: olho no objetivo "${plano.objetivo_descricao}"`,
-            acompanhamento.alertas.diarios[0],
-            "/dashboard/ian",
-            {
-               plano_id: plano.id,
-               mesa_id: plano.mesa_id,
-               estrategia_id: strategy.id,
-               periodicidade: "diaria",
-            },
-            todayRef,
-         );
-      }
+      for (const membroId of membros) {
+         if (acompanhamento.alertas.diarios[0]) {
+            await Notificacao.createComReferencia(
+               membroId,
+               `ian_diario_${plano.id}_${todayRef}`,
+               "alerta_financeiro",
+               `IAn: olho no objetivo "${plano.objetivo_descricao}"`,
+               acompanhamento.alertas.diarios[0],
+               "/dashboard/ian",
+               {
+                  plano_id: plano.id,
+                  mesa_id: plano.mesa_id,
+                  estrategia_id: strategy.id,
+                  periodicidade: "diaria",
+               },
+               todayRef,
+            );
+         }
 
-      if (
-         acompanhamento.status_geral !== "no_rumo" &&
-         acompanhamento.alertas.semanais[0]
-      ) {
-         await Notificacao.createComReferencia(
-            userId,
-            `ian_semanal_${plano.id}_${weekRef}`,
-            "alerta_financeiro",
-            `IAn semanal: ${strategy.nome}`,
-            acompanhamento.alertas.semanais[0],
-            "/dashboard/ian",
-            {
-               plano_id: plano.id,
-               mesa_id: plano.mesa_id,
-               estrategia_id: strategy.id,
-               periodicidade: "semanal",
-            },
-            null,
-         );
-      }
+         if (
+            acompanhamento.status_geral !== "no_rumo" &&
+            acompanhamento.alertas.semanais[0]
+         ) {
+            await Notificacao.createComReferencia(
+               membroId,
+               `ian_semanal_${plano.id}_${weekRef}`,
+               "alerta_financeiro",
+               `IAn semanal: ${strategy.nome}`,
+               acompanhamento.alertas.semanais[0],
+               "/dashboard/ian",
+               {
+                  plano_id: plano.id,
+                  mesa_id: plano.mesa_id,
+                  estrategia_id: strategy.id,
+                  periodicidade: "semanal",
+               },
+               null,
+            );
+         }
 
-      if (
-         acompanhamento.status_geral === "fora_do_rumo" &&
-         acompanhamento.alertas.mensais[0]
-      ) {
-         await Notificacao.createComReferencia(
-            userId,
-            `ian_mensal_${plano.id}_${monthRef}`,
-            "alerta_financeiro",
-            `IAn mensal: ajuste de rota necessario`,
-            acompanhamento.alertas.mensais[0],
-            "/dashboard/ian",
-            {
-               plano_id: plano.id,
-               mesa_id: plano.mesa_id,
-               estrategia_id: strategy.id,
-               periodicidade: "mensal",
-            },
-            null,
-         );
+         if (
+            acompanhamento.status_geral === "fora_do_rumo" &&
+            acompanhamento.alertas.mensais[0]
+         ) {
+            await Notificacao.createComReferencia(
+               membroId,
+               `ian_mensal_${plano.id}_${monthRef}`,
+               "alerta_financeiro",
+               `IAn mensal: ajuste de rota necessario`,
+               acompanhamento.alertas.mensais[0],
+               "/dashboard/ian",
+               {
+                  plano_id: plano.id,
+                  mesa_id: plano.mesa_id,
+                  estrategia_id: strategy.id,
+                  periodicidade: "mensal",
+               },
+               null,
+            );
+         }
       }
    }
 }
