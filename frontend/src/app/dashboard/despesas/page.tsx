@@ -564,8 +564,10 @@ export default function DespesasPage() {
          fecharModalPagamento();
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
-      } catch {
-         setErro("Erro ao marcar como paga");
+      } catch (error: unknown) {
+         const msg = (error as { response?: { data?: { error?: string } } })
+            ?.response?.data?.error;
+         setErro(msg || "Erro ao marcar como paga");
       } finally {
          setLoadingPagamento(false);
       }
@@ -639,8 +641,10 @@ export default function DespesasPage() {
          fecharModalDesfazer();
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
-      } catch {
-         setErro("Erro ao desfazer pagamento");
+      } catch (error: unknown) {
+         const msg = (error as { response?: { data?: { error?: string } } })
+            ?.response?.data?.error;
+         setErro(msg || "Erro ao desfazer pagamento");
       } finally {
          setLoadingDesfazer(false);
       }

@@ -18,6 +18,55 @@ class Despesa {
       }
    }
 
+   static async ensureParcelaGrupoId(id, mesaId, parcelaGrupoIdAtual) {
+      if (parcelaGrupoIdAtual) return parcelaGrupoIdAtual;
+
+      const novoGrupoId = uuidv4();
+      await db.query(
+         `UPDATE despesas
+          SET parcela_grupo_id = ?
+          WHERE id = ? AND mesa_id = ?`,
+         [novoGrupoId, id, mesaId],
+      );
+      return novoGrupoId;
+   }
+
+   static async findOrigemRecorrente(despesaOrId, mesaId) {
+      const despesa =
+         typeof despesaOrId === "object"
+            ? despesaOrId
+            : await Despesa.findById(despesaOrId, mesaId);
+
+      if (!despesa) return null;
+
+      if (despesa.origem_recorrente_id != null) {
+         return Despesa.findById(despesa.origem_recorrente_id, mesaId);
+      }
+
+      if (despesa.recorrente) {
+         return despesa;
+      }
+
+      if (!despesa.parcela_grupo_id) {
+         return null;
+      }
+
+      const [rows] = await db.query(
+         `SELECT id
+          FROM despesas
+          WHERE mesa_id = ?
+            AND parcela_grupo_id = ?
+            AND recorrente = TRUE
+            AND ativa = TRUE
+          ORDER BY id ASC
+          LIMIT 1`,
+         [mesaId, despesa.parcela_grupo_id],
+      );
+
+      if (!rows[0]?.id) return null;
+      return Despesa.findById(rows[0].id, mesaId);
+   }
+
    static montarDataNoMes(dataBase, mesReferencia) {
       const [anoMes, mesMes] = String(mesReferencia).split("-").map(Number);
       const [, , diaBase] = String(dataBase)
@@ -213,6 +262,86 @@ class Despesa {
          );
          return rows;
       }
+
+      const [rowsCompat] = await db.query(
+         `SELECT
+            d.*,
+            c.nome AS categoria_nome,
+            tp.nome AS tipo_pagamento_nome,
+            car.nome AS cartao_nome,
+            CASE
+               WHEN parent.id IS NOT NULL THEN TRUE
+               ELSE d.recorrente
+            END AS recorrente,
+            CASE
+               WHEN d.recorrente = TRUE THEN
+                  STR_TO_DATE(
+                     CONCAT(
+                        ?,
+                        '-',
+                        LPAD(
+                           LEAST(
+                              DAY(d.data_vencimento),
+                              DAY(LAST_DAY(?))
+                           ),
+                           2,
+                           '0'
+                        )
+                     ),
+                     '%Y-%m-%d'
+                  )
+               ELSE d.data_vencimento
+            END AS data_vencimento,
+            COALESCE(parent.data_cancelamento, d.data_cancelamento) AS data_cancelamento
+          FROM despesas d
+          LEFT JOIN despesas parent
+            ON parent.mesa_id = d.mesa_id
+           AND parent.parcela_grupo_id = d.parcela_grupo_id
+           AND parent.recorrente = TRUE
+           AND parent.ativa = TRUE
+           AND parent.id <> d.id
+          LEFT JOIN categorias c       ON d.categoria_id = c.id
+          LEFT JOIN tipos_pagamento tp ON d.tipo_pagamento_id = tp.id
+          LEFT JOIN cartoes car        ON d.cartao_id = car.id
+          WHERE d.mesa_id = ?
+            AND d.ativa = TRUE
+            AND d.fatura_id IS NULL
+            AND (
+               (
+                  d.recorrente = FALSE
+                  AND parent.id IS NULL
+                  AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+               )
+               OR
+               (
+                  d.recorrente = TRUE
+                  AND d.data_vencimento <= LAST_DAY(?)
+                  AND (
+                     d.data_cancelamento IS NULL
+                     OR DATE_FORMAT(d.data_cancelamento, '%Y-%m') > ?
+                  )
+                  AND NOT EXISTS (
+                     SELECT 1
+                     FROM despesas cf
+                     WHERE cf.mesa_id = d.mesa_id
+                       AND cf.parcela_grupo_id = d.parcela_grupo_id
+                       AND cf.recorrente = FALSE
+                       AND cf.ativa = TRUE
+                       AND cf.id <> d.id
+                       AND DATE_FORMAT(cf.data_vencimento, '%Y-%m') = ?
+                  )
+               )
+               OR
+               (
+                  d.recorrente = FALSE
+                  AND parent.id IS NOT NULL
+                  AND DATE_FORMAT(d.data_vencimento, '%Y-%m') = ?
+               )
+            )
+          ORDER BY data_vencimento ASC, d.id ASC`,
+         [mes, primeiroDia, mesaId, mes, primeiroDia, mes, mes, mes],
+      );
+      return rowsCompat;
 
       const [rows] = await db.query(
          `SELECT 
@@ -413,6 +542,68 @@ class Despesa {
          return { tipo: "recorrente", novoId: result.insertId };
       }
 
+      if (despesa.recorrente) {
+         const mes = String(mesReferencia || "").trim();
+         if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) {
+            throw new Error("MES_REFERENCIA_OBRIGATORIO");
+         }
+
+         const parcelaGrupoId = await Despesa.ensureParcelaGrupoId(
+            id,
+            mesaId,
+            despesa.parcela_grupo_id,
+         );
+
+         const [existing] = await db.query(
+            `SELECT id
+             FROM despesas
+             WHERE mesa_id = ?
+               AND parcela_grupo_id = ?
+               AND recorrente = FALSE
+               AND ativa = TRUE
+               AND id <> ?
+               AND DATE_FORMAT(data_vencimento, '%Y-%m') = ?`,
+            [mesaId, parcelaGrupoId, id, mes],
+         );
+
+         if (existing.length > 0) {
+            throw new Error("Pagamento ja confirmado para este mes");
+         }
+
+         const dataVencimentoMes = Despesa.montarDataNoMes(
+            despesa.data_vencimento,
+            mes,
+         );
+
+         const [result] = await db.query(
+            `INSERT INTO despesas
+             (mesa_id, descricao, tipo, valor_provisionado, valor_real, data_vencimento,
+              paga, data_pagamento, comprovante, categoria_id, tipo_pagamento_id,
+              cartao_id, fatura_id, recorrente, data_cancelamento, ativa, parcelas,
+              parcela_atual, parcela_grupo_id)
+             VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, FALSE, NULL, TRUE, ?, ?, ?)`,
+            [
+               mesaId,
+               despesa.descricao,
+               despesa.tipo || "variavel",
+               despesa.valor_provisionado,
+               valorReal,
+               dataVencimentoMes,
+               dataPagamento,
+               comprovante,
+               despesa.categoria_id || null,
+               despesa.tipo_pagamento_id || null,
+               despesa.cartao_id || null,
+               despesa.fatura_id || null,
+               despesa.parcelas || 1,
+               despesa.parcela_atual || 1,
+               parcelaGrupoId,
+            ],
+         );
+
+         return { tipo: "recorrente", novoId: result.insertId };
+      }
+
       await db.query(
          `UPDATE despesas 
           SET paga = TRUE, valor_real = ?, data_pagamento = ?, comprovante = ?
@@ -446,6 +637,41 @@ class Despesa {
                   AND mes_referencia IS NOT NULL
                   AND mes_referencia <= ?`,
                [mesaId, despesa.origem_recorrente_id, despesa.mes_referencia],
+            );
+
+            return { tipo: "recorrente", escopo: "anteriores" };
+         }
+
+         await db.query("DELETE FROM despesas WHERE id = ? AND mesa_id = ?", [
+            id,
+            mesaId,
+         ]);
+
+         return { tipo: "recorrente", escopo: "apenas" };
+      }
+
+      const origemRecorrente = await Despesa.findOrigemRecorrente(despesa, mesaId);
+      if (
+         origemRecorrente &&
+         origemRecorrente.id !== despesa.id &&
+         despesa.parcela_grupo_id
+      ) {
+         const escopo =
+            options.escopo === "anteriores" ? "anteriores" : "apenas";
+
+         if (escopo === "anteriores") {
+            await db.query(
+               `DELETE FROM despesas
+                WHERE mesa_id = ?
+                  AND parcela_grupo_id = ?
+                  AND recorrente = FALSE
+                  AND ativa = TRUE
+                  AND DATE_FORMAT(data_vencimento, '%Y-%m') <= ?`,
+               [
+                  mesaId,
+                  despesa.parcela_grupo_id,
+                  String(despesa.data_vencimento).substring(0, 7),
+               ],
             );
 
             return { tipo: "recorrente", escopo: "anteriores" };

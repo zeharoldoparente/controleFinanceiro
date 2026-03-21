@@ -389,13 +389,13 @@ class DespesaController {
          if (!despesa)
             return res.status(404).json({ error: "Despesa não encontrada" });
 
-         const origemRecorrenteId = despesa.origem_recorrente_id ?? despesa.id;
-         const despesaOrigem =
-            despesa.origem_recorrente_id != null
-               ? await Despesa.findById(origemRecorrenteId, mesa_id)
-               : despesa;
+         const despesaOrigem = await Despesa.findOrigemRecorrente(
+            despesa,
+            mesa_id,
+         );
+         const origemRecorrenteId = despesaOrigem?.id;
 
-         if (!despesaOrigem?.recorrente)
+         if (!despesaOrigem?.recorrente || !origemRecorrenteId)
             return res.status(400).json({ error: "Despesa não é recorrente" });
 
          await Despesa.cancelarRecorrencia(
@@ -431,7 +431,14 @@ class DespesaController {
          if (!despesa)
             return res.status(404).json({ error: "Despesa nÃ£o encontrada" });
 
-         const origemRecorrenteId = despesa.origem_recorrente_id ?? despesa.id;
+         const despesaOrigem = await Despesa.findOrigemRecorrente(
+            despesa,
+            mesa_id,
+         );
+         const origemRecorrenteId = despesaOrigem?.id;
+
+         if (!origemRecorrenteId)
+            return res.status(400).json({ error: "Despesa nÃ£o Ã© recorrente" });
 
          await Despesa.removerCancelamento(origemRecorrenteId, mesa_id);
          res.json({ message: "Cancelamento removido com sucesso!" });
@@ -479,15 +486,14 @@ class DespesaController {
             });
          }
 
-         const origemRecorrenteId = despesa.origem_recorrente_id ?? despesa.id;
-         const despesaOrigem =
-            despesa.origem_recorrente_id != null
-               ? await Despesa.findById(origemRecorrenteId, mesa_id)
-               : despesa;
-         const ehRecorrente =
-            !!despesaOrigem?.recorrente || despesa.origem_recorrente_id != null;
+         const despesaOrigem = await Despesa.findOrigemRecorrente(
+            despesa,
+            mesa_id,
+         );
+         const origemRecorrenteId = despesaOrigem?.id;
+         const ehRecorrente = !!despesaOrigem?.recorrente;
 
-         if (escopoExclusao === "posteriores" && ehRecorrente) {
+         if (escopoExclusao === "posteriores" && ehRecorrente && origemRecorrenteId) {
             const mesValido = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes || ""));
             const mesBase = mesValido
                ? String(mes)
