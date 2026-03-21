@@ -1,11 +1,20 @@
+const fs = require("fs");
+const path = require("path");
 const Receita = require("../models/Receita");
 const Mesa = require("../models/Mesa");
 const TipoPagamento = require("../models/TipoPagamento");
 const Categoria = require("../models/Categoria");
 
-class ReceitaController {
-   // ─── CREATE ───────────────────────────────────────────────────────────────
+function removerArquivoSeExistir(nomeArquivo) {
+   if (!nomeArquivo) return;
 
+   const filePath = path.resolve(__dirname, "../../uploads", nomeArquivo);
+   if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+   }
+}
+
+class ReceitaController {
    static async create(req, res) {
       try {
          const {
@@ -22,15 +31,16 @@ class ReceitaController {
 
          if (!mesa_id || !descricao || !valor || !data_recebimento) {
             return res.status(400).json({
-               error: "Mesa, descrição, valor e data de recebimento são obrigatórios",
+               error: "Mesa, descricao, valor e data de recebimento sao obrigatorios",
             });
          }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const resourceOwnerId = Number(mesa.criador_id) || Number(userId);
 
@@ -39,28 +49,31 @@ class ReceitaController {
                tipo_pagamento_id,
                resourceOwnerId,
             );
-            if (!tp || !tp.ativa)
+            if (!tp || !tp.ativa) {
                return res
                   .status(400)
-                  .json({ error: "Tipo de pagamento inválido ou inativo" });
+                  .json({ error: "Tipo de pagamento invalido ou inativo" });
+            }
          }
 
          if (categoria_id) {
             const cat = await Categoria.findById(categoria_id, resourceOwnerId);
-            if (!cat || !cat.ativa)
+            if (!cat || !cat.ativa) {
                return res
                   .status(400)
-                  .json({ error: "Categoria inválida ou inativa" });
-            if (cat.tipo !== "receita")
+                  .json({ error: "Categoria invalida ou inativa" });
+            }
+            if (cat.tipo !== "receita") {
                return res
                   .status(400)
                   .json({ error: "Categoria deve ser do tipo 'receita'" });
+            }
          }
 
-         // Recorrente não pode ter parcelas
          const totalParcelas = recorrente ? 1 : parseInt(parcelas) || 1;
-         if (totalParcelas > 60)
-            return res.status(400).json({ error: "Máximo de 60 parcelas" });
+         if (totalParcelas > 60) {
+            return res.status(400).json({ error: "Maximo de 60 parcelas" });
+         }
 
          const ids = await Receita.create({
             mesaId: mesa_id,
@@ -84,21 +97,21 @@ class ReceitaController {
       }
    }
 
-   // ─── LIST ─────────────────────────────────────────────────────────────────
-
    static async list(req, res) {
       try {
          const { mesa_id, mes } = req.query;
          const userId = req.userId;
 
-         if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+         if (!mesa_id) {
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const mesFiltro = mes || new Date().toISOString().slice(0, 7);
          const receitas = await Receita.findByMesaIdFiltrado(
@@ -113,26 +126,27 @@ class ReceitaController {
       }
    }
 
-   // ─── SHOW ─────────────────────────────────────────────────────────────────
-
    static async show(req, res) {
       try {
          const { id } = req.params;
          const { mesa_id } = req.query;
          const userId = req.userId;
 
-         if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+         if (!mesa_id) {
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+         if (!receita) {
+            return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
          res.json({ receita });
       } catch (error) {
@@ -140,8 +154,6 @@ class ReceitaController {
          res.status(500).json({ error: "Erro ao buscar receita" });
       }
    }
-
-   // ─── UPDATE ───────────────────────────────────────────────────────────────
 
    static async update(req, res) {
       try {
@@ -159,43 +171,48 @@ class ReceitaController {
 
          if (!mesa_id || !descricao || !valor || !data_recebimento) {
             return res.status(400).json({
-               error: "Mesa, descrição, valor e data de recebimento são obrigatórios",
+               error: "Mesa, descricao, valor e data de recebimento sao obrigatorios",
             });
          }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const resourceOwnerId = Number(mesa.criador_id) || Number(userId);
-
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+
+         if (!receita) {
+            return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
          if (tipo_pagamento_id) {
             const tp = await TipoPagamento.findById(
                tipo_pagamento_id,
                resourceOwnerId,
             );
-            if (!tp || !tp.ativa)
+            if (!tp || !tp.ativa) {
                return res
                   .status(400)
-                  .json({ error: "Tipo de pagamento inválido ou inativo" });
+                  .json({ error: "Tipo de pagamento invalido ou inativo" });
+            }
          }
 
          if (categoria_id) {
             const cat = await Categoria.findById(categoria_id, resourceOwnerId);
-            if (!cat || !cat.ativa)
+            if (!cat || !cat.ativa) {
                return res
                   .status(400)
-                  .json({ error: "Categoria inválida ou inativa" });
-            if (cat.tipo !== "receita")
+                  .json({ error: "Categoria invalida ou inativa" });
+            }
+            if (cat.tipo !== "receita") {
                return res
                   .status(400)
                   .json({ error: "Categoria deve ser do tipo 'receita'" });
+            }
          }
 
          await Receita.update(id, mesa_id, {
@@ -214,29 +231,32 @@ class ReceitaController {
       }
    }
 
-   // ─── CONFIRMAR RECEBIMENTO ────────────────────────────────────────────────
-
    static async confirmar(req, res) {
       try {
          const { id } = req.params;
-         const { mesa_id, valor_real, mes } = req.body;
+         const { mesa_id, valor_real, mes, ajuste_restante } = req.body;
          const userId = req.userId;
+         const comprovante = req.file ? req.file.filename : null;
 
          if (!mesa_id || !mes) {
             return res
                .status(400)
-               .json({ error: "mesa_id e mes são obrigatórios" });
+               .json({ error: "mesa_id e mes sao obrigatorios" });
          }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
+            removerArquivoSeExistir(comprovante);
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+         if (!receita) {
+            removerArquivoSeExistir(comprovante);
+            return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
          const valorConfirmado =
             valor_real != null
@@ -248,6 +268,10 @@ class ReceitaController {
             mesa_id,
             valorConfirmado,
             mes,
+            {
+               comprovante,
+               ajusteRestante: ajuste_restante,
+            },
          );
 
          res.json({
@@ -255,15 +279,21 @@ class ReceitaController {
             ...resultado,
          });
       } catch (error) {
+         removerArquivoSeExistir(req.file?.filename);
          console.error(error);
-         const status = error.message.includes("já confirmado") ? 409 : 500;
-         res.status(status).json({
-            error: error.message || "Erro ao confirmar recebimento",
-         });
+
+         const message = error.message || "Erro ao confirmar recebimento";
+         const status =
+            message.includes("ja confirmado") ||
+            message.includes("jÃ¡ confirmado")
+               ? 409
+               : message.includes("Nao ha parcelas restantes")
+                 ? 400
+                 : 500;
+
+         res.status(status).json({ error: message });
       }
    }
-
-   // ─── DESFAZER CONFIRMAÇÃO ─────────────────────────────────────────────────
 
    static async desfazerConfirmacao(req, res) {
       try {
@@ -271,18 +301,21 @@ class ReceitaController {
          const { mesa_id } = req.body;
          const userId = req.userId;
 
-         if (!mesa_id)
-            return res.status(400).json({ error: "mesa_id é obrigatório" });
+         if (!mesa_id) {
+            return res.status(400).json({ error: "mesa_id e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+         if (!receita) {
+            return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
          if (
             receita.status !== "recebida" &&
@@ -290,19 +323,17 @@ class ReceitaController {
          ) {
             return res
                .status(400)
-               .json({ error: "Receita não está confirmada" });
+               .json({ error: "Receita nao esta confirmada" });
          }
 
+         removerArquivoSeExistir(receita.comprovante);
          await Receita.desfazerConfirmacao(id, mesa_id);
-         res.json({ message: "Confirmação desfeita com sucesso!" });
+         res.json({ message: "Confirmacao desfeita com sucesso!" });
       } catch (error) {
          console.error(error);
-         res.status(500).json({ error: "Erro ao desfazer confirmação" });
+         res.status(500).json({ error: "Erro ao desfazer confirmacao" });
       }
    }
-
-
-   // ─── GRUPO DE PARCELAS ────────────────────────────────────────────────────
 
    static async getByGrupoParcela(req, res) {
       try {
@@ -310,14 +341,16 @@ class ReceitaController {
          const { mesa_id } = req.query;
          const userId = req.userId;
 
-         if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+         if (!mesa_id) {
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receitas = await Receita.findByGrupoParcela(grupo_parcela, mesa_id);
          res.json({ receitas });
@@ -326,7 +359,42 @@ class ReceitaController {
          res.status(500).json({ error: "Erro ao buscar grupo de parcelas" });
       }
    }
-   // ─── INATIVAR / REATIVAR / DELETE ─────────────────────────────────────────
+
+   static async getComprovante(req, res) {
+      try {
+         const { id } = req.params;
+         const { mesa_id } = req.query;
+         const userId = req.userId;
+
+         if (!mesa_id) {
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
+
+         const mesa = await Mesa.findById(mesa_id, userId);
+         if (!mesa) {
+            return res
+               .status(403)
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
+
+         const comprovante = await Receita.getComprovante(id, mesa_id);
+         if (!comprovante) {
+            return res
+               .status(404)
+               .json({ error: "Comprovante nao encontrado" });
+         }
+
+         const filePath = path.resolve(__dirname, "../../uploads", comprovante);
+         if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: "Arquivo nao encontrado" });
+         }
+
+         res.download(filePath);
+      } catch (error) {
+         console.error(error);
+         res.status(500).json({ error: "Erro ao baixar comprovante" });
+      }
+   }
 
    static async inativar(req, res) {
       try {
@@ -334,18 +402,21 @@ class ReceitaController {
          const { mesa_id, escopo, mes } = req.query;
          const userId = req.userId;
 
-         if (!mesa_id)
+         if (!mesa_id) {
             return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
                .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
+         if (!receita) {
             return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
          const escopoExclusao = escopo === "posteriores" ? "posteriores" : "apenas";
 
@@ -364,7 +435,8 @@ class ReceitaController {
             });
          }
 
-         const ehRecorrente = !!receita.recorrente || receita.origem_recorrente_id != null;
+         const ehRecorrente =
+            !!receita.recorrente || receita.origem_recorrente_id != null;
 
          if (escopoExclusao === "posteriores" && ehRecorrente) {
             const hasOrigemRecorrente =
@@ -376,6 +448,7 @@ class ReceitaController {
                   message: "Receita recorrente excluida com sucesso!",
                });
             }
+
             const origemRecorrenteId = receita.origem_recorrente_id ?? receita.id;
             const mesValido = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes || ""));
             const mesBase = mesValido
@@ -428,18 +501,21 @@ class ReceitaController {
          const { mesa_id } = req.query;
          const userId = req.userId;
 
-         if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+         if (!mesa_id) {
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+         if (!receita) {
+            return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
          await Receita.reativar(id, mesa_id);
          res.json({ message: "Receita reativada com sucesso!" });
@@ -455,19 +531,23 @@ class ReceitaController {
          const { mesa_id } = req.query;
          const userId = req.userId;
 
-         if (!mesa_id)
-            return res.status(400).json({ error: "ID da mesa é obrigatório" });
+         if (!mesa_id) {
+            return res.status(400).json({ error: "ID da mesa e obrigatorio" });
+         }
 
          const mesa = await Mesa.findById(mesa_id, userId);
-         if (!mesa)
+         if (!mesa) {
             return res
                .status(403)
-               .json({ error: "Você não tem acesso a esta mesa" });
+               .json({ error: "Voce nao tem acesso a esta mesa" });
+         }
 
          const receita = await Receita.findById(id, mesa_id);
-         if (!receita)
-            return res.status(404).json({ error: "Receita não encontrada" });
+         if (!receita) {
+            return res.status(404).json({ error: "Receita nao encontrada" });
+         }
 
+         removerArquivoSeExistir(receita.comprovante);
          await Receita.delete(id, mesa_id);
          res.json({ message: "Receita deletada com sucesso!" });
       } catch (error) {

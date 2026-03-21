@@ -7,19 +7,16 @@ export interface Receita {
    descricao: string;
    valor: number;
    data_recebimento: string;
-   // Confirmação
    status: "a_receber" | "recebida";
    valor_real: number | null;
    data_confirmacao: string | null;
-   // Parcelas
+   comprovante: string | null;
    parcelas: number;
    parcela_atual: number;
    grupo_parcela: string | null;
-   // Recorrente
    recorrente: boolean;
    origem_recorrente_id: number | null;
    mes_referencia: string | null;
-   // Joins
    categoria_id?: number;
    categoria_nome?: string;
    tipo_pagamento_id?: number;
@@ -36,7 +33,13 @@ export interface ReceitaCreate {
    categoria_id?: number;
    tipo_pagamento_id?: number;
    recorrente?: boolean;
-   parcelas?: number; // só para não recorrentes
+   parcelas?: number;
+}
+
+export interface ConfirmarReceitaOptions {
+   valorReal?: number;
+   arquivo?: File | null;
+   ajusteRestante?: "desconto" | "redistribuir";
 }
 
 const receitaService = {
@@ -63,29 +66,38 @@ const receitaService = {
       return response.data;
    },
 
-   /**
-    * Confirma o recebimento.
-    * Para recorrentes, cria um registro filho para o mês.
-    * valorReal: se omitido usa o valor provisionado.
-    */
    confirmar: async (
       id: number,
       mesaId: number,
       mes: string,
-      valorReal?: number,
+      options?: ConfirmarReceitaOptions,
    ) => {
-      const response = await api.patch(`/receitas/${id}/confirmar`, {
-         mesa_id: mesaId,
-         mes,
-         valor_real: valorReal,
-      });
+      const { valorReal, arquivo, ajusteRestante } = options || {};
+
+      const response = arquivo
+         ? await (() => {
+              const form = new FormData();
+              form.append("mesa_id", String(mesaId));
+              form.append("mes", mes);
+              if (valorReal !== undefined) {
+                 form.append("valor_real", String(valorReal));
+              }
+              if (ajusteRestante) {
+                 form.append("ajuste_restante", ajusteRestante);
+              }
+              form.append("comprovante", arquivo);
+              return api.patch(`/receitas/${id}/confirmar`, form);
+           })()
+         : await api.patch(`/receitas/${id}/confirmar`, {
+              mesa_id: mesaId,
+              mes,
+              valor_real: valorReal,
+              ajuste_restante: ajusteRestante,
+           });
+
       return response.data;
    },
 
-   /**
-    * Desfaz a confirmação de recebimento.
-    * Para confirmações de recorrentes, remove o registro filho.
-    */
    desfazerConfirmacao: async (id: number, mesaId: number) => {
       const response = await api.patch(`/receitas/${id}/desfazer-confirmacao`, {
          mesa_id: mesaId,
@@ -107,7 +119,6 @@ const receitaService = {
       return response.data;
    },
 
-
    buscarParcelasGrupo: async (grupoParcela: string, mesaId: number) => {
       const params = new URLSearchParams();
       params.append("mesa_id", mesaId.toString());
@@ -116,6 +127,15 @@ const receitaService = {
       );
       return response.data.receitas as Receita[];
    },
+
+   getComprovanteUrl: async (id: number, mesaId: number) => {
+      const response = await api.get(`/receitas/${id}/comprovante/download`, {
+         params: { mesa_id: mesaId },
+         responseType: "blob",
+      });
+      return URL.createObjectURL(response.data);
+   },
+
    reativar: async (id: number, mesaId: number) => {
       const response = await api.patch(
          `/receitas/${id}/reativar?mesa_id=${mesaId}`,
@@ -123,15 +143,16 @@ const receitaService = {
       return response.data;
    },
 
-   /** Lista de todas as mesas do usuário (usado em relatórios) */
    listarTodas: async (mes?: string) => {
       const mesaService = (await import("./mesaService")).default;
       const mesas = await mesaService.listar();
       const todasReceitas: Receita[] = [];
+
       for (const mesa of mesas) {
          const params = new URLSearchParams();
          params.append("mesa_id", mesa.id.toString());
          if (mes) params.append("mes", mes);
+
          const response = await api.get(`/receitas?${params.toString()}`);
          todasReceitas.push(
             ...response.data.receitas.map((r: Receita) => ({
@@ -140,6 +161,7 @@ const receitaService = {
             })),
          );
       }
+
       return todasReceitas.sort(
          (a, b) =>
             new Date(b.data_recebimento).getTime() -

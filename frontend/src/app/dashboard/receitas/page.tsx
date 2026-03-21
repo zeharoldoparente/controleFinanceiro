@@ -60,10 +60,24 @@ function formatarData(data: string) {
    const [ano, mes, dia] = data.substring(0, 10).split("-");
    return `${dia}/${mes}/${ano}`;
 }
+type ResumoParcelas = {
+   total: number;
+   realizado: number;
+};
+
+type AjusteRecebimento = "desconto" | "redistribuir";
 
 // Receita está confirmada se status='recebida' OU se é confirmação de recorrente
 function isConfirmada(r: Receita) {
    return r.status === "recebida" || r.origem_recorrente_id != null;
+}
+
+function isReceitaRecorrente(r: Receita) {
+   return !!r.recorrente || r.origem_recorrente_id != null;
+}
+
+function getMesReferenciaReceita(r: Receita) {
+   return r.mes_referencia || String(r.data_recebimento).substring(0, 7);
 }
 
 // ─── Badge de Status ──────────────────────────────────────────────────────────
@@ -111,16 +125,27 @@ export default function ReceitasPage() {
    // Modal confirmar recebimento
    const [modalConfirmar, setModalConfirmar] = useState<Receita | null>(null);
    const [valorReal, setValorReal] = useState("");
+   const [arquivoComprovante, setArquivoComprovante] = useState<File | null>(
+      null,
+   );
+   const [ajusteRecebimento, setAjusteRecebimento] =
+      useState<AjusteRecebimento>("desconto");
    const [loadingConfirmar, setLoadingConfirmar] = useState(false);
+
+   const [modalDetalhe, setModalDetalhe] = useState<Receita | null>(null);
+   const [comprovanteUrl, setComprovanteUrl] = useState<string | null>(null);
+   const [loadingComprovante, setLoadingComprovante] = useState(false);
+   const [resumoParcelasDetalhe, setResumoParcelasDetalhe] =
+      useState<ResumoParcelas | null>(null);
+   const [loadingResumoParcelasDetalhe, setLoadingResumoParcelasDetalhe] =
+      useState(false);
 
    // Modal excluir
    const [modalExcluir, setModalExcluir] = useState<Receita | null>(null);
    const [loadingExcluir, setLoadingExcluir] = useState(false);
    const [escopoExclusao, setEscopoExclusao] = useState<"apenas" | "posteriores">("apenas");
-   const [resumoParcelasEdicao, setResumoParcelasEdicao] = useState<{
-      total: number;
-      realizado: number;
-   } | null>(null);
+   const [resumoParcelasEdicao, setResumoParcelasEdicao] =
+      useState<ResumoParcelas | null>(null);
    const [loadingResumoParcelasEdicao, setLoadingResumoParcelasEdicao] =
       useState(false);
 
@@ -236,38 +261,43 @@ export default function ReceitasPage() {
 
    // ─── Modal criar/editar ───────────────────────────────────────────────────
 
-   const carregarResumoParcelasEdicao = async (receita: Receita) => {
+   const buscarResumoParcelas = async (
+      receita: Receita,
+   ): Promise<ResumoParcelas | null> => {
       if (
          !mesaSelecionada ||
          receita.parcelas <= 1 ||
          !receita.grupo_parcela
       ) {
-         setResumoParcelasEdicao(null);
-         setLoadingResumoParcelasEdicao(false);
-         return;
+         return null;
       }
 
+      const grupo = await receitaService.buscarParcelasGrupo(
+         receita.grupo_parcela,
+         mesaSelecionada.id,
+      );
+
+      const ativas = grupo.filter((r) => Boolean(r.ativa));
+      const base = ativas.length > 0 ? ativas : grupo;
+
+      const total = base.reduce(
+         (acc, r) => acc + parseFloat(String(r.valor ?? 0)),
+         0,
+      );
+      const realizado = base.reduce((acc, r) => {
+         if (r.status !== "recebida") return acc;
+         const valorRealizado = r.valor_real ?? r.valor;
+         return acc + parseFloat(String(valorRealizado ?? 0));
+      }, 0);
+
+      return { total, realizado };
+   };
+
+   const carregarResumoParcelasEdicao = async (receita: Receita) => {
       setLoadingResumoParcelasEdicao(true);
       try {
-         const grupo = await receitaService.buscarParcelasGrupo(
-            receita.grupo_parcela,
-            mesaSelecionada.id,
-         );
-
-         const ativas = grupo.filter((r) => Boolean(r.ativa));
-         const base = ativas.length > 0 ? ativas : grupo;
-
-         const total = base.reduce(
-            (acc, r) => acc + parseFloat(String(r.valor ?? 0)),
-            0,
-         );
-         const realizado = base.reduce((acc, r) => {
-            if (r.status !== "recebida") return acc;
-            const valorRealizado = r.valor_real ?? r.valor;
-            return acc + parseFloat(String(valorRealizado ?? 0));
-         }, 0);
-
-         setResumoParcelasEdicao({ total, realizado });
+         const resumo = await buscarResumoParcelas(receita);
+         setResumoParcelasEdicao(resumo);
       } catch {
          setResumoParcelasEdicao(null);
       } finally {
@@ -316,6 +346,55 @@ export default function ReceitasPage() {
       setResumoParcelasEdicao(null);
       setLoadingResumoParcelasEdicao(false);
    };
+
+   const abrirDetalhe = async (receita: Receita) => {
+      setModalDetalhe(receita);
+      setComprovanteUrl(null);
+      setResumoParcelasDetalhe(null);
+      setLoadingComprovante(false);
+      setLoadingResumoParcelasDetalhe(false);
+
+      if (receita.parcelas > 1 && receita.grupo_parcela) {
+         setLoadingResumoParcelasDetalhe(true);
+         try {
+            const resumo = await buscarResumoParcelas(receita);
+            setResumoParcelasDetalhe(resumo);
+         } catch {
+            setResumoParcelasDetalhe(null);
+         } finally {
+            setLoadingResumoParcelasDetalhe(false);
+         }
+      }
+
+      if (receita.comprovante && mesaSelecionada) {
+         setLoadingComprovante(true);
+         try {
+            const url = await receitaService.getComprovanteUrl(
+               receita.id,
+               mesaSelecionada.id,
+            );
+            setComprovanteUrl(url);
+         } catch {
+            setComprovanteUrl(null);
+         } finally {
+            setLoadingComprovante(false);
+         }
+      }
+   };
+
+   const fecharDetalhe = () => {
+      if (comprovanteUrl) URL.revokeObjectURL(comprovanteUrl);
+      setModalDetalhe(null);
+      setComprovanteUrl(null);
+      setResumoParcelasDetalhe(null);
+      setLoadingComprovante(false);
+      setLoadingResumoParcelasDetalhe(false);
+   };
+
+   const podeRedistribuirDiferenca = (receita: Receita) =>
+      !isReceitaRecorrente(receita) &&
+      receita.parcelas > 1 &&
+      receita.parcela_atual < receita.parcelas;
 
    const salvarReceita = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -379,6 +458,8 @@ export default function ReceitasPage() {
    const abrirConfirmar = (receita: Receita) => {
       setModalConfirmar(receita);
       setValorReal(receita.valor.toString());
+      setArquivoComprovante(null);
+      setAjusteRecebimento("desconto");
       setErro("");
    };
 
@@ -393,11 +474,21 @@ export default function ReceitasPage() {
          await receitaService.confirmar(
             modalConfirmar.id,
             mesaSelecionada.id,
-            mesSelecionado,
-            parseFloat(valorReal),
+            getMesReferenciaReceita(modalConfirmar),
+            {
+               valorReal: parseFloat(valorReal),
+               arquivo: arquivoComprovante,
+               ajusteRestante:
+                  parseFloat(valorReal) < parseFloat(String(modalConfirmar.valor)) &&
+                  podeRedistribuirDiferenca(modalConfirmar)
+                     ? ajusteRecebimento
+                     : undefined,
+            },
          );
          setSucesso("Recebimento confirmado!");
          setModalConfirmar(null);
+          setArquivoComprovante(null);
+          setAjusteRecebimento("desconto");
          carregarDados();
          setTimeout(() => setSucesso(""), 3000);
       } catch (error) {
@@ -532,7 +623,7 @@ export default function ReceitasPage() {
                   {sucesso}
                </div>
             )}
-            {erro && !modalAberto && !modalConfirmar && (
+            {erro && !modalAberto && !modalConfirmar && !modalDetalhe && (
                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
                   {erro}
                </div>
@@ -724,7 +815,8 @@ export default function ReceitasPage() {
                         return (
                            <div
                               key={receita.id}
-                              className="bg-white rounded-xl shadow-sm border border-gray-100 p-4"
+                              onClick={() => abrirDetalhe(receita)}
+                              className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 cursor-pointer"
                            >
                               <div className="flex items-start justify-between mb-2">
                                  <div className="flex-1 min-w-0 pr-2">
@@ -779,9 +871,10 @@ export default function ReceitasPage() {
                                     {confirmada ? (
                                        <button
                                           title="Desfazer confirmação"
-                                          onClick={() =>
-                                             desfazerConfirmacao(receita)
-                                          }
+                                          onClick={(e) => {
+                                             e.stopPropagation();
+                                             desfazerConfirmacao(receita);
+                                          }}
                                           className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
                                        >
                                           <svg
@@ -801,9 +894,10 @@ export default function ReceitasPage() {
                                     ) : (
                                        <button
                                           title="Confirmar recebimento"
-                                          onClick={() =>
-                                             abrirConfirmar(receita)
-                                          }
+                                          onClick={(e) => {
+                                             e.stopPropagation();
+                                             abrirConfirmar(receita);
+                                          }}
                                           className="p-1.5 rounded-lg text-green-500 hover:bg-green-50 hover:text-green-700 transition-colors"
                                        >
                                           <svg
@@ -825,7 +919,10 @@ export default function ReceitasPage() {
                                     {!isConfirmacaoRecorrente && (
                                        <button
                                           title="Editar"
-                                          onClick={() => abrirModal(receita)}
+                                          onClick={(e) => {
+                                             e.stopPropagation();
+                                             abrirModal(receita);
+                                          }}
                                           className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                                        >
                                           <svg
@@ -845,7 +942,10 @@ export default function ReceitasPage() {
                                     )}
                                     <button
                                        title="Excluir"
-                                       onClick={() => abrirModalExcluir(receita)}
+                                       onClick={(e) => {
+                                          e.stopPropagation();
+                                          abrirModalExcluir(receita);
+                                       }}
                                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                                     >
                                        <svg
@@ -913,7 +1013,8 @@ export default function ReceitasPage() {
                                  return (
                                     <tr
                                        key={receita.id}
-                                       className="hover:bg-gray-50 transition-colors"
+                                       onClick={() => abrirDetalhe(receita)}
+                                       className="hover:bg-gray-50 transition-colors cursor-pointer"
                                     >
                                        <td className="px-4 py-3">
                                           <div className="text-sm font-medium text-gray-900">
@@ -966,7 +1067,10 @@ export default function ReceitasPage() {
                                        <td className="px-4 py-3">
                                           <BadgeStatus receita={receita} />
                                        </td>
-                                       <td className="px-4 py-3 text-right">
+                                       <td
+                                          className="px-4 py-3 text-right"
+                                          onClick={(e) => e.stopPropagation()}
+                                       >
                                           <div className="flex items-center justify-end gap-1">
                                              {confirmada ? (
                                                 <button
@@ -1348,9 +1452,20 @@ export default function ReceitasPage() {
          {/* ══════════════════════════════════════════════════════════════
              Modal Confirmar Recebimento
          ══════════════════════════════════════════════════════════════ */}
+         {modalDetalhe && (
+            <ModalDetalheReceita
+               receita={modalDetalhe}
+               onClose={fecharDetalhe}
+               comprovanteUrl={comprovanteUrl}
+               loadingComprovante={loadingComprovante}
+               resumoParcelas={resumoParcelasDetalhe}
+               loadingResumoParcelas={loadingResumoParcelasDetalhe}
+            />
+         )}
+
          {modalConfirmar && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
                   <div className="p-6">
                      {/* Ícone + título */}
                      <div className="flex items-center gap-3 mb-4">
@@ -1421,10 +1536,94 @@ export default function ReceitasPage() {
                            )}
                      </div>
 
+                     {valorReal &&
+                        parseFloat(valorReal) <
+                           parseFloat(String(modalConfirmar.valor)) &&
+                        podeRedistribuirDiferenca(modalConfirmar) && (
+                           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                              <p className="text-sm font-semibold text-amber-800">
+                                 Como tratar a diferenca desta parcela?
+                              </p>
+                              <p className="mt-1 text-xs text-amber-700">
+                                 Voce recebeu menos que o previsto. Escolha se a
+                                 diferenca sera descontada nesta parcela ou
+                                 redistribuida nas proximas.
+                              </p>
+                              <div className="mt-3 space-y-2">
+                                 <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2">
+                                    <input
+                                       type="radio"
+                                       name="ajuste-recebimento"
+                                       checked={
+                                          ajusteRecebimento === "desconto"
+                                       }
+                                       onChange={() =>
+                                          setAjusteRecebimento("desconto")
+                                       }
+                                       className="mt-0.5"
+                                    />
+                                    <span>
+                                       <span className="block text-sm font-medium text-gray-800">
+                                          Dar desconto nesta parcela
+                                       </span>
+                                       <span className="block text-xs text-gray-500">
+                                          A diferenca deixa de ser cobrada nas
+                                          parcelas restantes.
+                                       </span>
+                                    </span>
+                                 </label>
+                                 <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2">
+                                    <input
+                                       type="radio"
+                                       name="ajuste-recebimento"
+                                       checked={
+                                          ajusteRecebimento === "redistribuir"
+                                       }
+                                       onChange={() =>
+                                          setAjusteRecebimento("redistribuir")
+                                       }
+                                       className="mt-0.5"
+                                    />
+                                    <span>
+                                       <span className="block text-sm font-medium text-gray-800">
+                                          Redistribuir nas proximas parcelas
+                                       </span>
+                                       <span className="block text-xs text-gray-500">
+                                          O valor faltante sera somado entre as
+                                          parcelas restantes.
+                                       </span>
+                                    </span>
+                                 </label>
+                              </div>
+                           </div>
+                        )}
+
+                     <div className="mb-5">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                           Comprovante
+                        </label>
+                        <input
+                           type="file"
+                           accept="image/*"
+                           onChange={(e) =>
+                              setArquivoComprovante(
+                                 e.target.files?.[0] ?? null,
+                              )
+                           }
+                           className="block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-green-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-green-700 hover:file:bg-green-100"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">
+                           Opcional. Aceita imagem do comprovante para consulta
+                           no detalhe da receita.
+                        </p>
+                     </div>
+
                      <div className="flex gap-3">
                         <button
                            onClick={() => {
                               setModalConfirmar(null);
+                              setArquivoComprovante(null);
+                              setAjusteRecebimento("desconto");
                               setErro("");
                            }}
                            className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
@@ -1532,6 +1731,246 @@ export default function ReceitasPage() {
             </div>
          )}
       </DashboardLayout>
+   );
+}
+
+function ModalDetalheReceita({
+   receita,
+   onClose,
+   comprovanteUrl,
+   loadingComprovante,
+   resumoParcelas,
+   loadingResumoParcelas,
+}: {
+   receita: Receita;
+   onClose: () => void;
+   comprovanteUrl: string | null;
+   loadingComprovante: boolean;
+   resumoParcelas: ResumoParcelas | null;
+   loadingResumoParcelas: boolean;
+}) {
+   const confirmada = isConfirmada(receita);
+   const isConfirmacaoRecorrente = receita.origem_recorrente_id != null;
+   const ehRecorrente = isReceitaRecorrente(receita);
+   const valorRecebido = receita.valor_real ?? receita.valor;
+
+   return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+         <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between p-4 sm:p-5 border-b border-gray-100">
+               <div className="flex-1 min-w-0 pr-3">
+                  <h2
+                     className={`text-base font-bold ${confirmada ? "text-gray-800" : "text-gray-800"}`}
+                  >
+                     {receita.descricao}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                     <BadgeStatus receita={receita} />
+                     {ehRecorrente && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                           {isConfirmacaoRecorrente ? "Recorrente ok" : "Recorrente"}
+                        </span>
+                     )}
+                  </div>
+               </div>
+               {receita.parcelas > 1 && (
+                  <div className="hidden sm:block text-right mr-2 shrink-0">
+                     {loadingResumoParcelas ? (
+                        <p className="text-[11px] text-gray-400">
+                           Carregando totais...
+                        </p>
+                     ) : resumoParcelas ? (
+                        <>
+                           <p className="text-[11px] text-gray-400 leading-tight">
+                              Total previsto: {formatarValor(resumoParcelas.total)}
+                           </p>
+                           <p className="text-[11px] text-gray-400 leading-tight">
+                              Total recebido:{" "}
+                              {formatarValor(resumoParcelas.realizado)}
+                           </p>
+                        </>
+                     ) : null}
+                  </div>
+               )}
+               <button
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
+               >
+                  <svg
+                     className="w-5 h-5"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24"
+                  >
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                     />
+                  </svg>
+               </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
+               <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 rounded-xl p-3">
+                     <p className="text-xs text-gray-400 mb-0.5">
+                        Valor previsto
+                     </p>
+                     <p className="text-base font-bold text-gray-700">
+                        {formatarValor(receita.valor)}
+                     </p>
+                  </div>
+                  <div
+                     className={`rounded-xl p-3 ${confirmada ? "bg-green-50" : "bg-gray-50"}`}
+                  >
+                     <p className="text-xs text-gray-400 mb-0.5">
+                        Valor recebido
+                     </p>
+                     <p
+                        className={`text-base font-bold ${confirmada ? "text-green-600" : "text-gray-400"}`}
+                     >
+                        {confirmada ? formatarValor(valorRecebido) : "-"}
+                     </p>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-3">
+                  <div>
+                     <p className="text-xs text-gray-400 mb-0.5">
+                        Data prevista
+                     </p>
+                     <p className="text-sm font-semibold text-gray-700">
+                        {formatarData(receita.data_recebimento)}
+                     </p>
+                  </div>
+                  {receita.data_confirmacao && (
+                     <div>
+                        <p className="text-xs text-gray-400 mb-0.5">
+                           Data do recebimento
+                        </p>
+                        <p className="text-sm font-semibold text-green-700">
+                           {formatarData(receita.data_confirmacao)}
+                        </p>
+                     </div>
+                  )}
+               </div>
+
+               {(receita.categoria_nome || receita.tipo_pagamento_nome) && (
+                  <div className="grid grid-cols-2 gap-3">
+                     {receita.categoria_nome && (
+                        <div>
+                           <p className="text-xs text-gray-400 mb-0.5">
+                              Categoria
+                           </p>
+                           <p className="text-sm font-semibold text-gray-700">
+                              {receita.categoria_nome}
+                           </p>
+                        </div>
+                     )}
+                     {receita.tipo_pagamento_nome && (
+                        <div>
+                           <p className="text-xs text-gray-400 mb-0.5">
+                              Forma de recebimento
+                           </p>
+                           <p className="text-sm font-semibold text-gray-700">
+                              {receita.tipo_pagamento_nome}
+                           </p>
+                        </div>
+                     )}
+                  </div>
+               )}
+
+               {receita.parcelas > 1 && (
+                  <div className="bg-blue-50 rounded-xl p-3">
+                     <p className="text-sm text-blue-700 font-medium">
+                        Parcela {receita.parcela_atual} de {receita.parcelas}
+                     </p>
+                     {loadingResumoParcelas ? (
+                        <p className="text-xs text-blue-500 mt-1">
+                           Carregando totais...
+                        </p>
+                     ) : resumoParcelas ? (
+                        <p className="text-xs text-blue-500 mt-1">
+                           Total previsto {formatarValor(resumoParcelas.total)} ·
+                           recebido {formatarValor(resumoParcelas.realizado)}
+                        </p>
+                     ) : null}
+                  </div>
+               )}
+
+               <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                     Comprovante
+                  </p>
+                  {loadingComprovante ? (
+                     <div className="flex items-center justify-center py-8">
+                        <svg
+                           className="w-6 h-6 animate-spin text-gray-400"
+                           fill="none"
+                           viewBox="0 0 24 24"
+                        >
+                           <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                           />
+                           <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                           />
+                        </svg>
+                     </div>
+                  ) : comprovanteUrl ? (
+                     <div className="space-y-3">
+                        <div className="rounded-xl overflow-hidden border border-gray-200">
+                           <a
+                              href={comprovanteUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                           >
+                              <img
+                                 src={comprovanteUrl}
+                                 alt="Comprovante da receita"
+                                 className="w-full max-h-64 object-contain bg-gray-50"
+                              />
+                           </a>
+                        </div>
+                        <a
+                           href={comprovanteUrl}
+                           download={`comprovante-receita-${receita.id}`}
+                           className="inline-flex w-full items-center justify-center rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-100"
+                        >
+                           Baixar comprovante
+                        </a>
+                     </div>
+                  ) : (
+                     <div className="flex flex-col items-center justify-center py-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                        <p className="text-xs text-gray-400">
+                           {confirmada
+                              ? "Nenhum comprovante anexado"
+                              : "Comprovante disponivel apos confirmar o recebimento"}
+                        </p>
+                     </div>
+                  )}
+               </div>
+            </div>
+
+            <div className="px-5 pb-5">
+               <button
+                  onClick={onClose}
+                  className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
+               >
+                  Fechar
+               </button>
+            </div>
+         </div>
+      </div>
    );
 }
 

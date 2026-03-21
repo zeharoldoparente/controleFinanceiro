@@ -212,6 +212,7 @@ CREATE TABLE receitas (
   status ENUM('a_receber', 'recebida') NOT NULL DEFAULT 'a_receber',
   valor_real DECIMAL(10, 2) DEFAULT NULL COMMENT 'Valor efetivamente recebido',
   data_confirmacao DATE DEFAULT NULL COMMENT 'Data em que foi confirmado o recebimento',
+  comprovante VARCHAR(255) DEFAULT NULL COMMENT 'Nome do arquivo de comprovante',
   parcelas INT NOT NULL DEFAULT 1,
   parcela_atual INT NOT NULL DEFAULT 1,
   grupo_parcela VARCHAR(36) DEFAULT NULL COMMENT 'UUID para agrupar parcelas de uma mesma receita',

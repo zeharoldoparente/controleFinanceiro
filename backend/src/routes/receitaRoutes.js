@@ -1,6 +1,7 @@
 const express = require("express");
 const ReceitaController = require("../controllers/receitaController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const upload = require("../middlewares/uploadMiddleware");
 const requireMesaWriteAccess = require("../middlewares/mesaWriteAccessMiddleware");
 
 const router = express.Router();
@@ -128,6 +129,7 @@ router.get("/", ReceitaController.list);
 
 // Rota específica deve vir antes de /:id
 router.get("/grupo/:grupo_parcela", ReceitaController.getByGrupoParcela);
+router.get("/:id/comprovante/download", ReceitaController.getComprovante);
 
 /**
  * @swagger
@@ -290,7 +292,12 @@ router.put("/:id", requireMesaWriteAccess, ReceitaController.update);
  *       409:
  *         description: Recebimento já confirmado para este mês
  */
-router.patch("/:id/confirmar", requireMesaWriteAccess, ReceitaController.confirmar);
+router.patch(
+   "/:id/confirmar",
+   upload.single("comprovante"),
+   requireMesaWriteAccess,
+   ReceitaController.confirmar,
+);
 
 /**
  * @swagger
