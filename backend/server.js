@@ -123,6 +123,7 @@ const mesaMembroRoutes = require("./src/routes/mesaMembroRoutes");
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
 const contaRoutes = require("./src/routes/contaRoutes");
 const faturaRoutes = require("./src/routes/faturaRoutes");
+const ianRoutes = require("./src/routes/ianRoutes");
 
 app.use("/api", apiLimiter);
 
@@ -136,6 +137,7 @@ app.use("/api/despesas", financeLimiter);
 app.use("/api/receitas", financeLimiter);
 app.use("/api/faturas", financeLimiter);
 app.use("/api/dashboard", financeLimiter);
+app.use("/api/ian", financeLimiter);
 app.use("/api/convites", conviteLimiter);
 
 app.use("/api/auth", authRoutes);
@@ -153,6 +155,7 @@ app.use("/api/mesa", mesaRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/conta", contaRoutes);
 app.use("/api/faturas", faturaRoutes);
+app.use("/api/ian", ianRoutes);
 
 app.get("/", (req, res) => {
    res.json({ message: "API do Controle Financeiro funcionando!" });
