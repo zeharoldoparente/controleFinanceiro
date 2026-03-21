@@ -14,6 +14,7 @@
 
 const db = require("../config/database");
 const Notificacao = require("../models/Notificacao");
+const { verificarAcompanhamentosIAn } = require("./ianAcompanhamentoService");
 
 function formatarValor(v) {
    return new Intl.NumberFormat("pt-BR", {
@@ -249,6 +250,7 @@ async function verificarTodosAlertas(userId) {
       verificarFaturasAcimaLimite,
       verificarReceitasPendentes,
       verificarGastosAltosPorCategoria,
+      verificarAcompanhamentosIAn,
    ];
    const nomes = [
       "DespesasVencidas",
@@ -257,6 +259,7 @@ async function verificarTodosAlertas(userId) {
       "FaturasAcimaLimite",
       "ReceitasPendentes",
       "GastosAltosPorCategoria",
+      "AcompanhamentosIAn",
    ];
    const resultados = await Promise.allSettled(checks.map((fn) => fn(userId)));
    resultados.forEach((r, i) => {

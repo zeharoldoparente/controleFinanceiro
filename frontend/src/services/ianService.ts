@@ -102,9 +102,67 @@ export interface IAnPlano {
    estrategias: IAnEstrategia[];
 }
 
+export interface IAnAcompanhamento {
+   status_geral: "no_rumo" | "atencao" | "fora_do_rumo";
+   resumo: string;
+   indicadores: {
+      gasto_mes_atual: number;
+      gasto_esperado_ate_agora: number;
+      desvio_atual: number;
+      gasto_cartao_semana: number;
+      gasto_hoje: number;
+      restante_sugerido_mes: number;
+   };
+   categorias_em_alerta: Array<{
+      categoria: string;
+      atual: number;
+      media: number;
+      alvo_categoria: number;
+      excedente: number;
+   }>;
+   alertas: {
+      diarios: string[];
+      semanais: string[];
+      mensais: string[];
+   };
+}
+
+export interface IAnPlanoAtivoResponse {
+   plano_ativo: {
+      id: number;
+      mesa_id: number;
+      estrategia_id: "suave" | "equilibrada" | "agressiva";
+      objetivo_descricao: string;
+      created_at: string;
+      updated_at: string;
+      plano: IAnPlano;
+   } | null;
+   acompanhamento: IAnAcompanhamento | null;
+}
+
 const ianService = {
    gerarPlano: async (payload: IAnPayload): Promise<IAnPlano> => {
       const response = await api.post("/ian/plano", payload);
+      return response.data;
+   },
+
+   buscarPlanoAtivo: async (mesaId: number): Promise<IAnPlanoAtivoResponse> => {
+      const response = await api.get("/ian/plano-ativo", {
+         params: { mesa_id: mesaId },
+      });
+      return response.data;
+   },
+
+   ativarPlano: async (
+      mesaId: number,
+      estrategiaId: "suave" | "equilibrada" | "agressiva",
+      plano: IAnPlano,
+   ): Promise<IAnPlanoAtivoResponse> => {
+      const response = await api.post("/ian/ativar", {
+         mesa_id: mesaId,
+         estrategia_id: estrategiaId,
+         plano,
+      });
       return response.data;
    },
 };

@@ -1,5 +1,9 @@
 const db = require("../config/database");
 const Mesa = require("../models/Mesa");
+const IAnPlano = require("../models/IAnPlano");
+const {
+   getPlanoAtivoComAcompanhamento,
+} = require("../services/ianAcompanhamentoService");
 
 function safeNumber(value) {
    const parsed = Number.parseFloat(value ?? 0);
@@ -275,6 +279,10 @@ function createStrategy({
       compoundProjection.taxa_mensal > 0
          ? `Com ${compoundProjection.taxa_mensal.toFixed(2)}% ao mes, o aporte necessario cai para R$ ${compoundProjection.aporte_mensal.toFixed(2)}.`
          : "Aqui o foco e caixa direto, sem contar rendimento na projecao.";
+   const reducaoImpulso = Math.max(
+      5,
+      Math.min(30, Math.round((pesoNaDespesa || 0) / 2)),
+   );
 
    return {
       id,
@@ -293,7 +301,7 @@ function createStrategy({
       projecao_composta: compoundProjection,
       rotinas: {
          diaria: [
-            `Segurar pelo menos ${Math.max(1, Math.round(economiaDiaria))}% das compras impulsivas na janela ${summarizeWindowLabel(topWindow)}.`,
+            `Reduzir em torno de ${reducaoImpulso}% as compras por impulso na janela ${summarizeWindowLabel(topWindow)}.`,
             "Registrar gastos no mesmo dia para o IAn detectar desvios antes do fechamento do mes.",
             saldoMedio < 0
                ? "Evitar novas compras parceladas enquanto o fluxo mensal estiver negativo."
@@ -318,6 +326,77 @@ function createStrategy({
 }
 
 class IAnController {
+   static async getPlanoAtivo(req, res) {
+      try {
+         const userId = req.userId;
+         const { mesa_id: mesaId } = req.query;
+
+         if (!mesaId) {
+            return res.status(400).json({
+               error: "Informe a mesa para recuperar o acompanhamento do IAn.",
+            });
+         }
+
+         const mesa = await Mesa.findById(mesaId, userId);
+         if (!mesa) {
+            return res.status(403).json({ error: "Sem acesso a esta mesa" });
+         }
+
+         const payload = await getPlanoAtivoComAcompanhamento(userId, mesa.id);
+         return res.json(payload || { plano_ativo: null, acompanhamento: null });
+      } catch (error) {
+         console.error("Erro ao buscar plano ativo do IAn:", error);
+         return res
+            .status(500)
+            .json({ error: "Erro ao buscar o acompanhamento do IAn" });
+      }
+   }
+
+   static async salvarPlanoAtivo(req, res) {
+      try {
+         const userId = req.userId;
+         const { mesa_id: mesaIdInput, estrategia_id: estrategiaId, plano } =
+            req.body || {};
+
+         if (!mesaIdInput || !estrategiaId || !plano?.objetivo?.descricao) {
+            return res.status(400).json({
+               error: "Dados insuficientes para ativar o acompanhamento do IAn.",
+            });
+         }
+
+         const mesa = await Mesa.findById(mesaIdInput, userId);
+         if (!mesa) {
+            return res.status(403).json({ error: "Sem acesso a esta mesa" });
+         }
+
+         const estrategia = plano?.estrategias?.find(
+            (item) => item.id === estrategiaId,
+         );
+
+         if (!estrategia) {
+            return res.status(400).json({
+               error: "A estrategia escolhida nao existe neste plano.",
+            });
+         }
+
+         await IAnPlano.saveActive({
+            userId,
+            mesaId: mesa.id,
+            objetivoDescricao: plano.objetivo.descricao,
+            estrategiaId,
+            plano,
+         });
+
+         const payload = await getPlanoAtivoComAcompanhamento(userId, mesa.id);
+         return res.json(payload);
+      } catch (error) {
+         console.error("Erro ao salvar plano ativo do IAn:", error);
+         return res
+            .status(500)
+            .json({ error: "Erro ao ativar o acompanhamento do IAn" });
+      }
+   }
+
    static async gerarPlano(req, res) {
       try {
          const userId = req.userId;

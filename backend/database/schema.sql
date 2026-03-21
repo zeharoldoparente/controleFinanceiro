@@ -330,6 +330,27 @@ CREATE TABLE notificacoes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
+-- TABELA: ian_planos
+-- Descricao: Plano ativo e acompanhamento persistido do IAn por mesa
+-- ============================================================
+CREATE TABLE ian_planos (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  mesa_id INT NOT NULL,
+  objetivo_descricao VARCHAR(500) NOT NULL,
+  estrategia_id VARCHAR(30) NOT NULL,
+  plano_json LONGTEXT NOT NULL,
+  ativo TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (mesa_id) REFERENCES mesas(id) ON DELETE CASCADE,
+  INDEX idx_ian_planos_user_mesa_ativo (user_id, mesa_id, ativo),
+  INDEX idx_ian_planos_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 -- DADOS INICIAIS
 -- Categorias padrão para facilitar o uso inicial
 -- ============================================================

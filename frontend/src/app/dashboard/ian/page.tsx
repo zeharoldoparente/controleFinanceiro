@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import authService from "@/services/authService";
 import ianService, {
+   type IAnAcompanhamento,
    type IAnEstrategia,
    type IAnPlano,
 } from "@/services/ianService";
@@ -22,6 +23,18 @@ function plusMonths(months: number) {
    const date = new Date();
    date.setMonth(date.getMonth() + months);
    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getStatusClass(status: IAnAcompanhamento["status_geral"]) {
+   if (status === "fora_do_rumo") {
+      return "bg-rose-50 text-rose-700 border-rose-200";
+   }
+
+   if (status === "atencao") {
+      return "bg-amber-50 text-amber-700 border-amber-200";
+   }
+
+   return "bg-emerald-50 text-emerald-700 border-emerald-200";
 }
 
 const sugestoes = [
@@ -56,8 +69,12 @@ export default function IAnPage() {
    const [valorObjetivo, setValorObjetivo] = useState("");
    const [prazoFinal, setPrazoFinal] = useState(plusMonths(6));
    const [loading, setLoading] = useState(false);
+   const [carregandoPlanoAtivo, setCarregandoPlanoAtivo] = useState(false);
+   const [salvandoAcompanhamento, setSalvandoAcompanhamento] = useState(false);
    const [erro, setErro] = useState("");
    const [plano, setPlano] = useState<IAnPlano | null>(null);
+   const [acompanhamento, setAcompanhamento] =
+      useState<IAnAcompanhamento | null>(null);
    const [estrategiaId, setEstrategiaId] = useState<
       "suave" | "equilibrada" | "agressiva" | null
    >(null);
@@ -65,6 +82,40 @@ export default function IAnPage() {
    useEffect(() => {
       if (!authService.isAuthenticated()) router.push("/login");
    }, [router]);
+
+   useEffect(() => {
+      if (!mesaSelecionada || mesaCarregando) return;
+
+      const carregarPlanoAtivo = async () => {
+         setCarregandoPlanoAtivo(true);
+         try {
+            const data = await ianService.buscarPlanoAtivo(mesaSelecionada.id);
+
+            if (data.plano_ativo?.plano) {
+               setPlano(data.plano_ativo.plano);
+               setAcompanhamento(data.acompanhamento);
+               setEstrategiaId(data.plano_ativo.estrategia_id);
+               setObjetivo(data.plano_ativo.plano.objetivo.descricao);
+               setPrazoFinal(data.plano_ativo.plano.objetivo.prazo_final || "");
+               setValorObjetivo(
+                  data.plano_ativo.plano.objetivo.valor_informado
+                     ? String(data.plano_ativo.plano.objetivo.valor_objetivo)
+                     : "",
+               );
+            } else {
+               setPlano(null);
+               setAcompanhamento(null);
+               setEstrategiaId(null);
+            }
+         } catch (error) {
+            console.warn("Falha ao carregar plano ativo do IAn:", error);
+         } finally {
+            setCarregandoPlanoAtivo(false);
+         }
+      };
+
+      carregarPlanoAtivo();
+   }, [mesaSelecionada, mesaCarregando]);
 
    const estrategia = useMemo<IAnEstrategia | null>(() => {
       if (!plano || !estrategiaId) return null;
@@ -94,6 +145,7 @@ export default function IAnPage() {
          });
 
          setPlano(resposta);
+         setAcompanhamento(null);
          setEstrategiaId("equilibrada");
       } catch (error) {
          setErro(
@@ -108,21 +160,62 @@ export default function IAnPage() {
       }
    };
 
+   const ativarAcompanhamento = async (
+      novaEstrategiaId: "suave" | "equilibrada" | "agressiva",
+   ) => {
+      if (!plano || !mesaSelecionada) return;
+
+      setEstrategiaId(novaEstrategiaId);
+      setSalvandoAcompanhamento(true);
+      setErro("");
+
+      try {
+         const data = await ianService.ativarPlano(
+            mesaSelecionada.id,
+            novaEstrategiaId,
+            plano,
+         );
+
+         if (data.plano_ativo?.plano) {
+            setPlano(data.plano_ativo.plano);
+            setAcompanhamento(data.acompanhamento);
+            setEstrategiaId(data.plano_ativo.estrategia_id);
+         }
+      } catch (error) {
+         setErro(
+            isApiError(error)
+               ? error.response?.data?.error ||
+                    error.response?.data?.message ||
+                    "Nao foi possivel ativar o acompanhamento."
+               : "Nao foi possivel ativar o acompanhamento.",
+         );
+      } finally {
+         setSalvandoAcompanhamento(false);
+      }
+   };
+
    return (
       <DashboardLayout>
          <div className="space-y-6">
             <section className="rounded-[28px] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.30),_transparent_34%),linear-gradient(135deg,_#032e22,_#0f5132_46%,_#dff6ea_140%)] p-6 text-white shadow-[0_28px_70px_-32px_rgba(5,80,55,0.85)] md:p-8">
-               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]">
-                  IAn
-               </span>
+               <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]">
+                     IAn
+                  </span>
+                  {acompanhamento && (
+                     <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold">
+                        acompanhamento ativo
+                     </span>
+                  )}
+               </div>
                <h1 className="mt-4 max-w-3xl text-3xl font-black tracking-tight md:text-4xl">
-                  Estrategia financeira com leitura de comportamento, nao so uma
-                  automacao basica.
+                  Estrategia financeira com memoria, contexto e acompanhamento
+                  vivo.
                </h1>
                <p className="mt-3 max-w-2xl text-sm leading-6 text-emerald-50/85 md:text-base">
-                  O IAn cruza receitas, despesas, categorias, cartoes e janelas
-                  de gasto para montar tres caminhos: suave, equilibrado e
-                  agressivo.
+                  O IAn nao fica mais so no plano. Agora ele pode manter uma
+                  linha ativa por mesa e acompanhar desvios diarios, semanais e
+                  mensais com base no seu objetivo.
                </p>
             </section>
 
@@ -187,15 +280,22 @@ export default function IAnPage() {
                         </div>
                      )}
 
-                     <button
-                        onClick={gerarPlano}
-                        disabled={loading || mesaCarregando || !mesaSelecionada}
-                        className="rounded-2xl bg-gradient-to-r from-emerald-600 to-green-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                     >
-                        {loading
-                           ? "IAn analisando seus dados..."
-                           : "Gerar plano inteligente"}
-                     </button>
+                     <div className="flex flex-wrap gap-3">
+                        <button
+                           onClick={gerarPlano}
+                           disabled={loading || mesaCarregando || !mesaSelecionada}
+                           className="rounded-2xl bg-gradient-to-r from-emerald-600 to-green-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                           {loading
+                              ? "IAn analisando seus dados..."
+                              : "Gerar plano inteligente"}
+                        </button>
+                        {carregandoPlanoAtivo && (
+                           <span className="self-center text-sm text-gray-500">
+                              Recuperando acompanhamento salvo...
+                           </span>
+                        )}
+                     </div>
                   </div>
                </div>
 
@@ -205,15 +305,16 @@ export default function IAnPage() {
                   </p>
                   <div className="mt-4 grid gap-3">
                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700">
-                        Diagnostica se voce esta no vermelho, apertado ou com
-                        folego.
+                        Guarda uma estrategia ativa por mesa para nao resetar ao
+                        sair da tela.
                      </div>
                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700">
-                        Encontra categorias e horarios onde seus vazamentos
-                        aparecem.
+                        Compara seu gasto atual com o ritmo ideal do mes e com
+                        as categorias que voce precisava enxugar.
                      </div>
                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700">
-                        Converte tudo em cadencia diaria, semanal e mensal.
+                        Concentra o acompanhamento no que importa: cartao,
+                        categorias que vazam e desvio do plano.
                      </div>
                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                         Mesa ativa:{" "}
@@ -231,8 +332,9 @@ export default function IAnPage() {
                      O plano do IAn aparece aqui.
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-emerald-900/70">
-                     Assim que voce definir a meta, ele retorna sinais,
-                     diagnostico e tres linhas de estrategia.
+                     Assim que voce definir a meta, ele retorna diagnostico,
+                     estrategias e, se voce ativar uma linha, guarda tudo para o
+                     proximo acesso.
                   </p>
                </section>
             ) : (
@@ -314,17 +416,6 @@ export default function IAnPage() {
                               </p>
                            </div>
                         </div>
-
-                        <div className="mt-5 flex flex-wrap gap-2">
-                           {plano.sinais.map((sinal) => (
-                              <span
-                                 key={sinal}
-                                 className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"
-                              >
-                                 {sinal}
-                              </span>
-                           ))}
-                        </div>
                      </div>
 
                      <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
@@ -365,19 +456,28 @@ export default function IAnPage() {
                         return (
                            <button
                               key={item.id}
-                              onClick={() => setEstrategiaId(item.id)}
+                              onClick={() => ativarAcompanhamento(item.id)}
                               className={`rounded-[26px] border bg-white p-5 text-left shadow-sm transition-all ${
                                  ativa
                                     ? "border-gray-900 ring-2 ring-gray-900/10"
                                     : "border-gray-100"
                               }`}
                            >
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                                 {item.intensidade}
-                              </p>
-                              <h3 className="mt-2 text-xl font-bold text-gray-900">
-                                 {item.nome}
-                              </h3>
+                              <div className="flex items-center justify-between gap-3">
+                                 <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                       {item.intensidade}
+                                    </p>
+                                    <h3 className="mt-2 text-xl font-bold text-gray-900">
+                                       {item.nome}
+                                    </h3>
+                                 </div>
+                                 {ativa && (
+                                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                                       ativa
+                                    </span>
+                                 )}
+                              </div>
                               <div
                                  className="mt-4 rounded-[22px] p-4 text-white"
                                  style={{
@@ -403,12 +503,144 @@ export default function IAnPage() {
                                        item.projecao_composta.juros_estimados,
                                     )}
                                  </span>
-                                 <span>{item.viabilidade}</span>
+                                 <span>
+                                    {salvandoAcompanhamento && ativa
+                                       ? "salvando..."
+                                       : item.viabilidade}
+                                 </span>
                               </div>
                            </button>
                         );
                      })}
                   </section>
+
+                  {acompanhamento && (
+                     <section className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                           <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                 Acompanhamento ao vivo
+                              </p>
+                              <h3 className="mt-2 text-2xl font-bold text-gray-900">
+                                 O IAn esta acompanhando seu comportamento agora.
+                              </h3>
+                           </div>
+                           <div
+                              className={`rounded-full border px-4 py-2 text-sm font-semibold ${getStatusClass(acompanhamento.status_geral)}`}
+                           >
+                              {acompanhamento.status_geral.replaceAll("_", " ")}
+                           </div>
+                        </div>
+
+                        <p className="mt-3 text-sm leading-6 text-gray-600">
+                           {acompanhamento.resumo}
+                        </p>
+
+                        <div className="mt-5 grid gap-3 md:grid-cols-4">
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Gasto do mes
+                              </p>
+                              <p className="mt-2 text-lg font-bold text-gray-900">
+                                 {formatCurrency(
+                                    acompanhamento.indicadores.gasto_mes_atual,
+                                 )}
+                              </p>
+                           </div>
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Ritmo ideal
+                              </p>
+                              <p className="mt-2 text-lg font-bold text-gray-900">
+                                 {formatCurrency(
+                                    acompanhamento.indicadores.gasto_esperado_ate_agora,
+                                 )}
+                              </p>
+                           </div>
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Desvio atual
+                              </p>
+                              <p className="mt-2 text-lg font-bold text-gray-900">
+                                 {formatCurrency(
+                                    acompanhamento.indicadores.desvio_atual,
+                                 )}
+                              </p>
+                           </div>
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Cartao na semana
+                              </p>
+                              <p className="mt-2 text-lg font-bold text-gray-900">
+                                 {formatCurrency(
+                                    acompanhamento.indicadores.gasto_cartao_semana,
+                                 )}
+                              </p>
+                           </div>
+                        </div>
+
+                        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                           {(
+                              [
+                                 ["Diario", acompanhamento.alertas.diarios],
+                                 ["Semanal", acompanhamento.alertas.semanais],
+                                 ["Mensal", acompanhamento.alertas.mensais],
+                              ] as const
+                           ).map(([label, itens]) => (
+                              <div
+                                 key={label}
+                                 className="rounded-2xl border border-gray-100 p-4"
+                              >
+                                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                    {label}
+                                 </p>
+                                 <ul className="mt-3 space-y-2">
+                                    {itens.map((item) => (
+                                       <li
+                                          key={item}
+                                          className="text-sm leading-6 text-gray-600"
+                                       >
+                                          {item}
+                                       </li>
+                                    ))}
+                                 </ul>
+                              </div>
+                           ))}
+                        </div>
+
+                        {acompanhamento.categorias_em_alerta.length > 0 && (
+                           <div className="mt-6">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                 Categorias em alerta
+                              </p>
+                              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                 {acompanhamento.categorias_em_alerta.map(
+                                    (item) => (
+                                       <div
+                                          key={item.categoria}
+                                          className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
+                                       >
+                                          <p className="text-sm font-semibold text-amber-900">
+                                             {item.categoria}
+                                          </p>
+                                          <p className="mt-2 text-xs text-amber-700">
+                                             Atual {formatCurrency(item.atual)}
+                                          </p>
+                                          <p className="text-xs text-amber-700">
+                                             Ritmo alvo{" "}
+                                             {formatCurrency(item.alvo_categoria)}
+                                          </p>
+                                          <p className="mt-2 text-sm font-bold text-amber-900">
+                                             Excesso {formatCurrency(item.excedente)}
+                                          </p>
+                                       </div>
+                                    ),
+                                 )}
+                              </div>
+                           </div>
+                        )}
+                     </section>
+                  )}
 
                   {estrategia && (
                      <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
@@ -426,77 +658,55 @@ export default function IAnPage() {
                                  className="rounded-full px-4 py-2 text-sm font-semibold text-white"
                                  style={{ backgroundColor: estrategia.cor }}
                               >
-                                 {formatCurrency(estrategia.economia_diaria)} por
-                                 dia
+                                 aporte mensal{" "}
+                                 {formatCurrency(
+                                    estrategia.projecao_composta.aporte_mensal,
+                                 )}
                               </div>
                            </div>
 
-                           {plano.objetivo.usar_juros_compostos && (
-                              <div className="mt-4 grid gap-3 md:grid-cols-4">
-                                 <div className="rounded-2xl bg-emerald-50 p-4">
-                                    <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
-                                       Taxa estimada
-                                    </p>
-                                    <p className="mt-2 text-lg font-bold text-emerald-950">
-                                       {estrategia.projecao_composta.taxa_mensal.toFixed(
-                                          2,
-                                       )}
-                                       % a.m.
-                                    </p>
-                                 </div>
-                                 <div className="rounded-2xl bg-emerald-50 p-4">
-                                    <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
-                                       Aporte mensal
-                                    </p>
-                                    <p className="mt-2 text-lg font-bold text-emerald-950">
-                                       {formatCurrency(
-                                          estrategia.projecao_composta.aporte_mensal,
-                                       )}
-                                    </p>
-                                 </div>
-                                 <div className="rounded-2xl bg-emerald-50 p-4">
-                                    <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
-                                       Juros estimados
-                                    </p>
-                                    <p className="mt-2 text-lg font-bold text-emerald-950">
-                                       {formatCurrency(
-                                          estrategia.projecao_composta.juros_estimados,
-                                       )}
-                                    </p>
-                                 </div>
-                                 <div className="rounded-2xl bg-emerald-50 p-4">
-                                    <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
-                                       Sem juros
-                                    </p>
-                                    <p className="mt-2 text-lg font-bold text-emerald-950">
-                                       {formatCurrency(
-                                          estrategia.projecao_composta.aporte_sem_juros,
-                                       )}
-                                    </p>
-                                 </div>
+                           <div className="mt-5 grid gap-4 md:grid-cols-4">
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Taxa estimada
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {estrategia.projecao_composta.taxa_mensal.toFixed(
+                                       2,
+                                    )}
+                                    % a.m.
+                                 </p>
                               </div>
-                           )}
-
-                           <div className="mt-5 grid gap-4 md:grid-cols-3">
-                              {(
-                                 [
-                                    ["Diario", estrategia.economia_diaria],
-                                    ["Semanal", estrategia.economia_semanal],
-                                    ["Mensal", estrategia.economia_mensal],
-                                 ] as const
-                              ).map(([label, value]) => (
-                                 <div
-                                    key={label}
-                                    className="rounded-2xl bg-gray-50 p-4"
-                                 >
-                                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
-                                       {label}
-                                    </p>
-                                    <p className="mt-2 text-lg font-bold text-gray-900">
-                                       {formatCurrency(value)}
-                                    </p>
-                                 </div>
-                              ))}
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Total aportado
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {formatCurrency(
+                                       estrategia.projecao_composta.total_aportado,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Juros estimados
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {formatCurrency(
+                                       estrategia.projecao_composta.juros_estimados,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Sem juros
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {formatCurrency(
+                                       estrategia.projecao_composta.aporte_sem_juros,
+                                    )}
+                                 </p>
+                              </div>
                            </div>
 
                            <div className="mt-6 grid gap-4 lg:grid-cols-3">

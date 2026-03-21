@@ -1,10 +1,21 @@
 const db = require("../config/database");
 
 class Notificacao {
-   /**
-    * Cria uma notificação simples (sem anti-duplicata).
-    * Usado pelos controllers de convite etc.
-    */
+   static async hasReferenciaColumns() {
+      try {
+         const [rows] = await db.query(
+            `SELECT COLUMN_NAME
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'notificacoes'
+               AND COLUMN_NAME IN ('referencia', 'expires_at')`,
+         );
+         return rows.length === 2;
+      } catch (_) {
+         return false;
+      }
+   }
+
    static async create(userId, tipo, titulo, mensagem, link, dadosExtras) {
       const [result] = await db.query(
          `INSERT INTO notificacoes
@@ -15,13 +26,6 @@ class Notificacao {
       return result.insertId;
    }
 
-   /**
-    * Cria uma notificação com referência única (anti-duplicata).
-    * Usado pelo alertasService para alertas financeiros automáticos.
-    *
-    * @param {string} referencia  - Chave única do evento (ex: "despesa_vencida_42")
-    * @param {string|null} expiresAt - Data ISO "YYYY-MM-DD" em que o alerta pode ser recriado
-    */
    static async createComReferencia(
       userId,
       referencia,
@@ -32,7 +36,26 @@ class Notificacao {
       dadosExtras = null,
       expiresAt = null,
    ) {
-      // Verifica se já existe notificação ativa com essa referência
+      const hasReferenciaColumns = await this.hasReferenciaColumns();
+
+      if (!hasReferenciaColumns) {
+         const [existente] = await db.query(
+            `SELECT id
+             FROM notificacoes
+             WHERE user_id = ? AND titulo = ? AND DATE(created_at) = CURDATE()
+             LIMIT 1`,
+            [userId, titulo],
+         );
+
+         if (existente.length > 0) return null;
+
+         return this.create(userId, tipo, titulo, mensagem, link, {
+            ...(dadosExtras || {}),
+            _referencia: referencia,
+            _expires_at: expiresAt,
+         });
+      }
+
       const [existente] = await db.query(
          `SELECT id FROM notificacoes
           WHERE user_id = ? AND referencia = ?
@@ -40,7 +63,8 @@ class Notificacao {
           LIMIT 1`,
          [userId, referencia],
       );
-      if (existente.length > 0) return null; // já notificado, não duplica
+
+      if (existente.length > 0) return null;
 
       const [result] = await db.query(
          `INSERT INTO notificacoes
@@ -57,6 +81,7 @@ class Notificacao {
             expiresAt,
          ],
       );
+
       return result.insertId;
    }
 

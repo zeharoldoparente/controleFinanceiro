@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import { MesaProvider } from "@/contexts/MesaContext";
+import { useAlertas } from "@/hooks/useAlertas";
 import {
    FULL_TOUR_STEPS,
    getScreenHelpSteps,
@@ -46,6 +47,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
    const [neverShowAgain, setNeverShowAgain] = useState(false);
    const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
    const [viewport, setViewport] = useState({ width: 1280, height: 720 });
+
+   useAlertas();
 
    const toggleSidebar = () => {
       setSidebarOpen(!sidebarOpen);
