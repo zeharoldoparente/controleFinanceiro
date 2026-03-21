@@ -9,5 +9,6 @@ router.use(authMiddleware);
 router.get("/plano-ativo", IAnController.getPlanoAtivo);
 router.post("/plano", IAnController.gerarPlano);
 router.post("/ativar", IAnController.salvarPlanoAtivo);
+router.post("/sugestoes", IAnController.getSugestoesInvestimento);
 
 module.exports = router;

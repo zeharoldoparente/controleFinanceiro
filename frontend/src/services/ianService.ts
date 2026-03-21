@@ -140,6 +140,63 @@ export interface IAnPlanoAtivoResponse {
    acompanhamento: IAnAcompanhamento | null;
 }
 
+export interface IAnSugestaoPesquisa {
+   codigo?: string;
+   nome: string;
+   mercado: string;
+   preco_atual?: number | null;
+   variacao_dia?: number | null;
+   moeda?: string | null;
+   atualizado_em?: string | null;
+   fonte: string;
+}
+
+export interface IAnSugestaoInvestimento {
+   id: string;
+   titulo: string;
+   categoria: string;
+   classe: "renda_fixa" | "renda_variavel";
+   disponibilidade: "agora" | "condicional";
+   prioridade: number;
+   risco: "baixo" | "medio" | "alto";
+   liquidez: "alta" | "media";
+   horizonte: string;
+   adequacao: string;
+   motivo_ian: string;
+   quando_nao_faz_sentido: string;
+   como_usar: string;
+   observacoes: string[];
+   exemplos_pesquisa: IAnSugestaoPesquisa[];
+}
+
+export interface IAnSugestoesInvestimentoResponse {
+   contexto: {
+      status_financeiro: string;
+      objetivo_tipo: string;
+      prazo_meses: number;
+      saldo_medio: number;
+      receita_media: number;
+      despesa_media: number;
+      renda_variavel_liberada: boolean;
+      modo_base: string;
+      resumo_momento: string;
+      recomendacao_base: string;
+      fontes: {
+         juros: {
+            nome: string;
+            status: "ao_vivo" | "indisponivel";
+         };
+         mercado: {
+            nome: string;
+            status: "ao_vivo" | "indisponivel" | "sem_token" | "sem_ativos";
+         };
+      };
+   };
+   aviso_geral: string;
+   disclaimer: string;
+   sugestoes: IAnSugestaoInvestimento[];
+}
+
 const ianService = {
    gerarPlano: async (payload: IAnPayload): Promise<IAnPlano> => {
       const response = await api.post("/ian/plano", payload);
@@ -161,6 +218,17 @@ const ianService = {
       const response = await api.post("/ian/ativar", {
          mesa_id: mesaId,
          estrategia_id: estrategiaId,
+         plano,
+      });
+      return response.data;
+   },
+
+   buscarSugestoes: async (
+      mesaId: number,
+      plano?: IAnPlano | null,
+   ): Promise<IAnSugestoesInvestimentoResponse> => {
+      const response = await api.post("/ian/sugestoes", {
+         mesa_id: mesaId,
          plano,
       });
       return response.data;

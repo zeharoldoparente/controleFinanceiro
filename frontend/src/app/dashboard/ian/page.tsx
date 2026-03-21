@@ -8,6 +8,7 @@ import ianService, {
    type IAnAcompanhamento,
    type IAnEstrategia,
    type IAnPlano,
+   type IAnSugestoesInvestimentoResponse,
 } from "@/services/ianService";
 import { useMesa } from "@/contexts/MesaContext";
 import { isApiError } from "@/types";
@@ -35,6 +36,29 @@ function getStatusClass(status: IAnAcompanhamento["status_geral"]) {
    }
 
    return "bg-emerald-50 text-emerald-700 border-emerald-200";
+}
+
+function formatPercent(value?: number | null) {
+   if (typeof value !== "number" || Number.isNaN(value)) return null;
+   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function getDisponibilidadeClass(disponibilidade: "agora" | "condicional") {
+   return disponibilidade === "agora"
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-amber-100 text-amber-700";
+}
+
+function getRiscoClass(risco: "baixo" | "medio" | "alto") {
+   if (risco === "alto") {
+      return "bg-rose-100 text-rose-700";
+   }
+
+   if (risco === "medio") {
+      return "bg-amber-100 text-amber-700";
+   }
+
+   return "bg-sky-100 text-sky-700";
 }
 
 const sugestoes = [
@@ -78,6 +102,23 @@ export default function IAnPage() {
    const [estrategiaId, setEstrategiaId] = useState<
       "suave" | "equilibrada" | "agressiva" | null
    >(null);
+   const [abaAtiva, setAbaAtiva] = useState<"plano" | "sugestoes">("plano");
+   const [carregandoSugestoes, setCarregandoSugestoes] = useState(false);
+   const [erroSugestoes, setErroSugestoes] = useState("");
+   const [sugestoesInvestimento, setSugestoesInvestimento] =
+      useState<IAnSugestoesInvestimentoResponse | null>(null);
+   const chaveSugestoes = useMemo(() => {
+      if (!mesaSelecionada || !plano) return "";
+
+      return [
+         mesaSelecionada.id,
+         plano.objetivo.descricao,
+         plano.objetivo.tipo,
+         plano.objetivo.prazo_meses,
+         plano.objetivo.valor_objetivo,
+         estrategiaId || "sem-estrategia",
+      ].join(":");
+   }, [mesaSelecionada, plano, estrategiaId]);
 
    useEffect(() => {
       if (!authService.isAuthenticated()) router.push("/login");
@@ -117,6 +158,56 @@ export default function IAnPage() {
       carregarPlanoAtivo();
    }, [mesaSelecionada, mesaCarregando]);
 
+   useEffect(() => {
+      if (!plano) {
+         setSugestoesInvestimento(null);
+         setErroSugestoes("");
+         return;
+      }
+
+      if (abaAtiva !== "sugestoes" || !mesaSelecionada || !chaveSugestoes) {
+         return;
+      }
+
+      let ativo = true;
+
+      const carregarSugestoes = async () => {
+         setCarregandoSugestoes(true);
+         setErroSugestoes("");
+
+         try {
+            const data = await ianService.buscarSugestoes(
+               mesaSelecionada.id,
+               plano,
+            );
+
+            if (ativo) {
+               setSugestoesInvestimento(data);
+            }
+         } catch (error) {
+            if (!ativo) return;
+
+            setErroSugestoes(
+               isApiError(error)
+                  ? error.response?.data?.error ||
+                       error.response?.data?.message ||
+                       "Nao foi possivel carregar as sugestoes agora."
+                  : "Nao foi possivel carregar as sugestoes agora.",
+            );
+         } finally {
+            if (ativo) {
+               setCarregandoSugestoes(false);
+            }
+         }
+      };
+
+      carregarSugestoes();
+
+      return () => {
+         ativo = false;
+      };
+   }, [abaAtiva, mesaSelecionada, plano, chaveSugestoes]);
+
    const estrategia = useMemo<IAnEstrategia | null>(() => {
       if (!plano || !estrategiaId) return null;
       return plano.estrategias.find((item) => item.id === estrategiaId) || null;
@@ -147,6 +238,7 @@ export default function IAnPage() {
          setPlano(resposta);
          setAcompanhamento(null);
          setEstrategiaId("equilibrada");
+         setSugestoesInvestimento(null);
       } catch (error) {
          setErro(
             isApiError(error)
@@ -180,6 +272,7 @@ export default function IAnPage() {
             setPlano(data.plano_ativo.plano);
             setAcompanhamento(data.acompanhamento);
             setEstrategiaId(data.plano_ativo.estrategia_id);
+            setSugestoesInvestimento(null);
          }
       } catch (error) {
          setErro(
@@ -217,6 +310,29 @@ export default function IAnPage() {
                   linha ativa por mesa e acompanhar desvios diarios, semanais e
                   mensais com base no seu objetivo.
                </p>
+            </section>
+
+            <section className="rounded-[22px] border border-gray-100 bg-white p-2 shadow-sm">
+               <div className="grid gap-2 md:grid-cols-2">
+                  {(
+                     [
+                        ["plano", "Plano e acompanhamento"],
+                        ["sugestoes", "Sugestoes de aplicacao"],
+                     ] as const
+                  ).map(([aba, label]) => (
+                     <button
+                        key={aba}
+                        onClick={() => setAbaAtiva(aba)}
+                        className={`rounded-[18px] px-4 py-3 text-sm font-semibold transition ${
+                           abaAtiva === aba
+                              ? "bg-gray-900 text-white shadow-lg shadow-gray-900/10"
+                              : "bg-gray-50 text-gray-600"
+                        }`}
+                     >
+                        {label}
+                     </button>
+                  ))}
+               </div>
             </section>
 
             <section className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
@@ -336,6 +452,336 @@ export default function IAnPage() {
                      estrategias e, se voce ativar uma linha, guarda tudo para o
                      proximo acesso.
                   </p>
+               </section>
+            ) : abaAtiva === "sugestoes" ? (
+               <section className="space-y-4">
+                  <div className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
+                     <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                           Curadoria do IAn
+                        </p>
+                        <h2 className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
+                           Sugestoes de aplicacao para pesquisar com calma.
+                        </h2>
+                        <p className="mt-3 text-sm leading-6 text-gray-600">
+                           O IAn nao empurra produto. Ele usa o seu momento
+                           financeiro para dizer o que pode fazer sentido agora
+                           e o que e melhor deixar so no radar.
+                        </p>
+
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Objetivo
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-gray-900">
+                                 {plano.objetivo.descricao}
+                              </p>
+                           </div>
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Prazo
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-gray-900">
+                                 {plano.objetivo.prazo_meses} meses
+                              </p>
+                           </div>
+                           <div className="rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                 Momento
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-gray-900">
+                                 {plano.diagnostico.status_financeiro}
+                              </p>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="rounded-[26px] border border-emerald-100 bg-emerald-50/70 p-5 shadow-sm md:p-6">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                           Regra do produto
+                        </p>
+                        <div className="mt-4 space-y-3 text-sm leading-6 text-emerald-950/80">
+                           <p>
+                              Primeiro o IAn tenta proteger caixa, fluxo e
+                              meta. So depois ele abre espaco para renda
+                              variavel.
+                           </p>
+                           <p>
+                              As sugestoes aqui sao educativas e servem como
+                              ponto de partida para pesquisa na corretora ou
+                              carteira que voce ja usa.
+                           </p>
+                           <p>
+                              Se o seu contexto mudar, a ordem dessas sugestoes
+                              muda junto.
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {erroSugestoes && (
+                     <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        {erroSugestoes}
+                     </div>
+                  )}
+
+                  {carregandoSugestoes ? (
+                     <div className="rounded-[26px] border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+                        IAn montando sua vitrine de sugestoes...
+                     </div>
+                  ) : !sugestoesInvestimento ? (
+                     <div className="rounded-[26px] border border-dashed border-gray-200 bg-white p-8 text-center shadow-sm">
+                        <h3 className="text-xl font-bold text-gray-900">
+                           Gere ou ative um plano primeiro.
+                        </h3>
+                        <p className="mt-3 text-sm leading-6 text-gray-600">
+                           O IAn precisa do objetivo e do diagnostico da mesa
+                           para sugerir opcoes com contexto.
+                        </p>
+                     </div>
+                  ) : (
+                     <>
+                        <section className="grid gap-4 xl:grid-cols-[1.04fr_0.96fr]">
+                           <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                 <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                       Leitura do momento
+                                    </p>
+                                    <h3 className="mt-2 text-2xl font-bold text-gray-900">
+                                       {sugestoesInvestimento.contexto.recomendacao_base}
+                                    </h3>
+                                 </div>
+                                 <span
+                                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                                       sugestoesInvestimento.contexto.renda_variavel_liberada
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-amber-100 text-amber-700"
+                                    }`}
+                                 >
+                                    {sugestoesInvestimento.contexto.renda_variavel_liberada
+                                       ? "renda variavel liberada com cautela"
+                                       : "renda variavel so no radar"}
+                                 </span>
+                              </div>
+
+                              <p className="mt-3 text-sm leading-6 text-gray-600">
+                                 {sugestoesInvestimento.contexto.resumo_momento}
+                              </p>
+
+                              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                                 <div className="rounded-2xl bg-gray-50 p-4">
+                                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                       Juros
+                                    </p>
+                                    <p className="mt-2 text-sm font-semibold text-gray-900">
+                                       {sugestoesInvestimento.contexto.fontes.juros.status ===
+                                       "ao_vivo"
+                                          ? "Banco Central ao vivo"
+                                          : "Banco Central indisponivel"}
+                                    </p>
+                                 </div>
+                                 <div className="rounded-2xl bg-gray-50 p-4">
+                                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                       Mercado
+                                    </p>
+                                    <p className="mt-2 text-sm font-semibold text-gray-900">
+                                       {sugestoesInvestimento.contexto.fontes.mercado.status ===
+                                       "ao_vivo"
+                                          ? "B3 com cotacao ao vivo"
+                                          : "catalogo educativo"}
+                                    </p>
+                                 </div>
+                                 <div className="rounded-2xl bg-gray-50 p-4">
+                                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                       Base
+                                    </p>
+                                    <p className="mt-2 text-sm font-semibold text-gray-900">
+                                       {sugestoesInvestimento.contexto.modo_base.replaceAll(
+                                          "_",
+                                          " ",
+                                       )}
+                                    </p>
+                                 </div>
+                              </div>
+                           </div>
+
+                           <div className="rounded-[26px] border border-amber-200 bg-amber-50 p-5 shadow-sm md:p-6">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                                 Aviso importante
+                              </p>
+                              <p className="mt-3 text-sm leading-6 text-amber-950/80">
+                                 {sugestoesInvestimento.aviso_geral}
+                              </p>
+                              <p className="mt-4 rounded-2xl bg-white/80 p-4 text-sm leading-6 text-amber-950/80">
+                                 {sugestoesInvestimento.disclaimer}
+                              </p>
+                           </div>
+                        </section>
+
+                        <section className="grid gap-4 xl:grid-cols-2">
+                           {sugestoesInvestimento.sugestoes.map((sugestao) => (
+                              <article
+                                 key={sugestao.id}
+                                 className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6"
+                              >
+                                 <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                       <div className="flex flex-wrap gap-2">
+                                          <span
+                                             className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${getDisponibilidadeClass(
+                                                sugestao.disponibilidade,
+                                             )}`}
+                                          >
+                                             {sugestao.disponibilidade === "agora"
+                                                ? "faz sentido agora"
+                                                : "melhor pesquisar para depois"}
+                                          </span>
+                                          <span
+                                             className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${getRiscoClass(
+                                                sugestao.risco,
+                                             )}`}
+                                          >
+                                             risco {sugestao.risco}
+                                          </span>
+                                       </div>
+                                       <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                          {sugestao.categoria}
+                                       </p>
+                                       <h3 className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
+                                          {sugestao.titulo}
+                                       </h3>
+                                    </div>
+
+                                    <div className="rounded-2xl bg-gray-50 px-4 py-3 text-right">
+                                       <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                          Liquidez
+                                       </p>
+                                       <p className="mt-2 text-sm font-semibold text-gray-900">
+                                          {sugestao.liquidez}
+                                       </p>
+                                    </div>
+                                 </div>
+
+                                 <div className="mt-5 grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-2xl bg-gray-50 p-4">
+                                       <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                          Horizonte
+                                       </p>
+                                       <p className="mt-2 text-sm font-semibold text-gray-900">
+                                          {sugestao.horizonte}
+                                       </p>
+                                    </div>
+                                    <div className="rounded-2xl bg-gray-50 p-4">
+                                       <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                          Adequacao
+                                       </p>
+                                       <p className="mt-2 text-sm font-semibold text-gray-900">
+                                          {sugestao.adequacao}
+                                       </p>
+                                    </div>
+                                 </div>
+
+                                 <div className="mt-5 space-y-4">
+                                    <div>
+                                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                          Por que o IAn sugeriu
+                                       </p>
+                                       <p className="mt-2 text-sm leading-6 text-gray-600">
+                                          {sugestao.motivo_ian}
+                                       </p>
+                                    </div>
+
+                                    <div>
+                                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                          Como usar
+                                       </p>
+                                       <p className="mt-2 text-sm leading-6 text-gray-600">
+                                          {sugestao.como_usar}
+                                       </p>
+                                    </div>
+
+                                    <div>
+                                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                          Quando nao faz sentido
+                                       </p>
+                                       <p className="mt-2 text-sm leading-6 text-gray-600">
+                                          {sugestao.quando_nao_faz_sentido}
+                                       </p>
+                                    </div>
+                                 </div>
+
+                                 <div className="mt-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                       Exemplos para pesquisar
+                                    </p>
+                                    <div className="mt-3 grid gap-3">
+                                       {sugestao.exemplos_pesquisa.map((item) => (
+                                          <div
+                                             key={`${sugestao.id}-${item.codigo || item.nome}`}
+                                             className="rounded-2xl border border-gray-100 p-4"
+                                          >
+                                             <div className="flex flex-wrap items-center justify-between gap-3">
+                                                <div>
+                                                   <p className="text-sm font-semibold text-gray-900">
+                                                      {item.codigo
+                                                         ? `${item.codigo} · ${item.nome}`
+                                                         : item.nome}
+                                                   </p>
+                                                   <p className="mt-1 text-xs text-gray-400">
+                                                      {item.mercado} · fonte{" "}
+                                                      {item.fonte}
+                                                   </p>
+                                                </div>
+
+                                                {typeof item.preco_atual ===
+                                                   "number" && (
+                                                   <div className="text-right">
+                                                      <p className="text-sm font-bold text-gray-900">
+                                                         {formatCurrency(
+                                                            item.preco_atual,
+                                                         )}
+                                                      </p>
+                                                      {formatPercent(
+                                                         item.variacao_dia,
+                                                      ) && (
+                                                         <p
+                                                            className={`text-xs font-semibold ${
+                                                               (item.variacao_dia ||
+                                                                  0) >= 0
+                                                                  ? "text-emerald-700"
+                                                                  : "text-rose-700"
+                                                            }`}
+                                                         >
+                                                            {formatPercent(
+                                                               item.variacao_dia,
+                                                            )}
+                                                         </p>
+                                                      )}
+                                                   </div>
+                                                )}
+                                             </div>
+                                          </div>
+                                       ))}
+                                    </div>
+                                 </div>
+
+                                 <div className="mt-5 space-y-2">
+                                    {sugestao.observacoes.map((item) => (
+                                       <p
+                                          key={item}
+                                          className="rounded-2xl bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-600"
+                                       >
+                                          {item}
+                                       </p>
+                                    ))}
+                                 </div>
+                              </article>
+                           ))}
+                        </section>
+                     </>
+                  )}
                </section>
             ) : (
                <>

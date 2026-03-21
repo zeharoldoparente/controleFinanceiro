@@ -4,6 +4,9 @@ const IAnPlano = require("../models/IAnPlano");
 const {
    getPlanoAtivoComAcompanhamento,
 } = require("../services/ianAcompanhamentoService");
+const {
+   getSugestoesInvestimento,
+} = require("../services/ianInvestimentosService");
 
 function safeNumber(value) {
    const parsed = Number.parseFloat(value ?? 0);
@@ -815,6 +818,42 @@ class IAnController {
          return res
             .status(500)
             .json({ error: "Erro ao gerar o plano inteligente do IAn" });
+      }
+   }
+
+   static async getSugestoesInvestimento(req, res) {
+      try {
+         const userId = req.userId;
+         const { mesa_id: mesaIdInput, plano } = req.body || {};
+
+         if (!mesaIdInput) {
+            return res.status(400).json({
+               error: "Selecione uma mesa para o IAn sugerir possibilidades de aplicacao.",
+            });
+         }
+
+         const mesa = await Mesa.findById(mesaIdInput, userId);
+         if (!mesa) {
+            return res.status(403).json({ error: "Sem acesso a esta mesa" });
+         }
+
+         const payload = await getSugestoesInvestimento({
+            mesaId: mesa.id,
+            planoInput: plano,
+         });
+
+         if (!payload) {
+            return res.status(400).json({
+               error: "Gere ou ative um plano do IAn antes de pedir sugestoes de aplicacao.",
+            });
+         }
+
+         return res.json(payload);
+      } catch (error) {
+         console.error("Erro ao gerar sugestoes de investimento do IAn:", error);
+         return res.status(500).json({
+            error: "Erro ao montar as sugestoes educativas de aplicacao do IAn",
+         });
       }
    }
 }
