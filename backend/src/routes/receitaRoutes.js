@@ -128,7 +128,74 @@ router.post("/", requireMesaWriteAccess, ReceitaController.create);
 router.get("/", ReceitaController.list);
 
 // Rota específica deve vir antes de /:id
+/**
+ * @swagger
+ * /api/receitas/grupo/{grupo_parcela}:
+ *   get:
+ *     summary: Buscar receitas por grupo de parcelas
+ *     description: Retorna todas as receitas vinculadas ao mesmo grupo de parcelamento.
+ *     tags: [Receitas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: grupo_parcela
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador do grupo de parcelas
+ *         example: 4f40cb7f-16f2-4ec8-b37a-2ed1e58fdb1f
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da mesa
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Lista de receitas do grupo
+ *       400:
+ *         description: ID da mesa nao informado
+ *       403:
+ *         description: Sem acesso a esta mesa
+ */
 router.get("/grupo/:grupo_parcela", ReceitaController.getByGrupoParcela);
+/**
+ * @swagger
+ * /api/receitas/{id}/comprovante/download:
+ *   get:
+ *     summary: Baixar comprovante da receita
+ *     description: Faz o download do comprovante associado a uma receita.
+ *     tags: [Receitas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da receita
+ *         example: 25
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da mesa
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: Arquivo do comprovante
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Comprovante ou arquivo nao encontrado
+ */
 router.get("/:id/comprovante/download", ReceitaController.getComprovante);
 
 /**
@@ -244,7 +311,7 @@ router.put("/:id", requireMesaWriteAccess, ReceitaController.update);
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -264,6 +331,14 @@ router.put("/:id", requireMesaWriteAccess, ReceitaController.update);
  *                 format: float
  *                 description: Valor efetivamente recebido (opcional, padrão = valor provisionado)
  *                 example: 4850.00
+ *               ajuste_restante:
+ *                 type: boolean
+ *                 description: Quando aplicavel, redistribui diferenca nas parcelas restantes
+ *                 example: false
+ *               comprovante:
+ *                 type: string
+ *                 format: binary
+ *                 description: Arquivo de comprovante opcional
  *     responses:
  *       200:
  *         description: Recebimento confirmado com sucesso

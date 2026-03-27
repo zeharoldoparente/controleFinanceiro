@@ -8,7 +8,7 @@ router.use(authMiddleware);
 
 /**
  * @swagger
- * /api/mesas:
+ * /api/mesa:
  *   post:
  *     summary: Criar nova mesa
  *     description: Cria uma nova mesa de controle financeiro (limite de 2 mesas no plano free)
@@ -51,7 +51,7 @@ router.post("/", MesaController.create);
 
 /**
  * @swagger
- * /api/mesas:
+ * /api/mesa:
  *   get:
  *     summary: Listar mesas do usuário
  *     description: Retorna todas as mesas que o usuário criou ou foi convidado
@@ -92,7 +92,7 @@ router.get("/", MesaController.list);
 
 /**
  * @swagger
- * /api/mesas/{id}:
+ * /api/mesa/{id}:
  *   get:
  *     summary: Buscar mesa específica
  *     description: Retorna detalhes de uma mesa específica
@@ -117,7 +117,7 @@ router.get("/:id", MesaController.show);
 
 /**
  * @swagger
- * /api/mesas/{id}:
+ * /api/mesa/{id}:
  *   put:
  *     summary: Atualizar mesa
  *     description: Atualiza o nome da mesa (apenas criador pode editar)
@@ -153,7 +153,7 @@ router.put("/:id", MesaController.update);
 
 /**
  * @swagger
- * /api/mesas/{id}:
+ * /api/mesa/{id}:
  *   delete:
  *     summary: Deletar mesa
  *     description: Deleta uma mesa (apenas criador pode deletar)
