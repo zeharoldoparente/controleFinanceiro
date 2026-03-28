@@ -11,6 +11,16 @@ const { createRateLimiter } = require("./src/middlewares/rateLimitMiddleware");
 
 const app = express();
 const swaggerSpec = createSwaggerSpec();
+const swaggerBasicUiOptions = {
+   customSiteTitle: "Controle Financeiro | API Docs",
+   swaggerOptions: {
+      docExpansion: "list",
+      defaultModelsExpandDepth: -1,
+      displayRequestDuration: true,
+      filter: true,
+      persistAuthorization: true,
+   },
+};
 const swaggerUiOptions = getSwaggerUiOptions("/docs-assets");
 
 app.disable("x-powered-by");
@@ -102,6 +112,12 @@ app.get("/api-docs.json", (req, res) => {
 
 app.use(
    "/api-docs",
+   swaggerUi.serveFiles(swaggerSpec, swaggerBasicUiOptions),
+   swaggerUi.setup(swaggerSpec, swaggerBasicUiOptions),
+);
+
+app.use(
+   "/api-docs-fancy",
    swaggerUi.serveFiles(swaggerSpec, swaggerUiOptions),
    swaggerUi.setup(swaggerSpec, swaggerUiOptions),
 );
