@@ -1,9 +1,11 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 require("dotenv").config();
 const db = require("./src/config/database");
 const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./swagger");
+const { createSwaggerSpec, resolveServerUrl } = require("./swagger");
+const { getSwaggerUiOptions } = require("./src/docs/swaggerTheme");
 const securityHeadersMiddleware = require("./src/middlewares/securityHeadersMiddleware");
 const { createRateLimiter } = require("./src/middlewares/rateLimitMiddleware");
 
@@ -85,24 +87,41 @@ const conviteLimiter = createRateLimiter({
    message: "Muitas tentativas em convites. Aguarde e tente novamente.",
 });
 
+function getRequestBaseUrl(req) {
+   const forwardedProto = String(
+      req.headers["x-forwarded-proto"] || req.protocol || "http",
+   )
+      .split(",")[0]
+      .trim();
+   const host = req.get("host");
+
+   if (!host) {
+      return resolveServerUrl();
+   }
+
+   return resolveServerUrl(`${forwardedProto}://${host}`);
+}
+
+function renderSwaggerUi(req, res, next) {
+   const swaggerSpec = createSwaggerSpec(getRequestBaseUrl(req));
+   return swaggerUi.setup(
+      swaggerSpec,
+      getSwaggerUiOptions("/docs-assets"),
+   )(req, res, next);
+}
+
 app.use(securityHeadersMiddleware);
 app.use(cors(corsOptions));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use("/docs-assets", express.static(path.join(__dirname, "public/docs")));
 
-app.use(
-   "/api-docs",
-   swaggerUi.serve,
-   swaggerUi.setup(swaggerSpec, {
-      customCss: ".swagger-ui .topbar { display: none }",
-      customSiteTitle: "API Controle Financeiro - Documentacao",
-      swaggerOptions: {
-         docExpansion: "none",
-         defaultModelsExpandDepth: -1,
-      },
-   }),
-);
+app.get("/api-docs.json", (req, res) => {
+   res.json(createSwaggerSpec(getRequestBaseUrl(req)));
+});
+
+app.use("/api-docs", swaggerUi.serve, renderSwaggerUi);
 
 db.getConnection()
    .then(() => console.log("Conectado ao MySQL!"))
