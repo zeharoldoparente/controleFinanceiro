@@ -4,12 +4,14 @@ const path = require("path");
 require("dotenv").config();
 const db = require("./src/config/database");
 const swaggerUi = require("swagger-ui-express");
-const { createSwaggerSpec, resolveServerUrl } = require("./swagger");
+const { createSwaggerSpec } = require("./swagger");
 const { getSwaggerUiOptions } = require("./src/docs/swaggerTheme");
 const securityHeadersMiddleware = require("./src/middlewares/securityHeadersMiddleware");
 const { createRateLimiter } = require("./src/middlewares/rateLimitMiddleware");
 
 const app = express();
+const swaggerSpec = createSwaggerSpec();
+const swaggerUiOptions = getSwaggerUiOptions("/docs-assets");
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -87,28 +89,6 @@ const conviteLimiter = createRateLimiter({
    message: "Muitas tentativas em convites. Aguarde e tente novamente.",
 });
 
-function getRequestBaseUrl(req) {
-   const forwardedProto = String(
-      req.headers["x-forwarded-proto"] || req.protocol || "http",
-   )
-      .split(",")[0]
-      .trim();
-   const host = req.get("host");
-
-   if (!host) {
-      return resolveServerUrl();
-   }
-
-   return resolveServerUrl(`${forwardedProto}://${host}`);
-}
-
-function attachSwaggerDoc(req, res, next) {
-   req.swaggerDoc = createSwaggerSpec(getRequestBaseUrl(req));
-   next();
-}
-
-const swaggerUiOptions = getSwaggerUiOptions("/docs-assets");
-
 app.use(securityHeadersMiddleware);
 app.use(cors(corsOptions));
 
@@ -117,14 +97,13 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/docs-assets", express.static(path.join(__dirname, "public/docs")));
 
 app.get("/api-docs.json", (req, res) => {
-   res.json(createSwaggerSpec(getRequestBaseUrl(req)));
+   res.json(swaggerSpec);
 });
 
 app.use(
    "/api-docs",
-   attachSwaggerDoc,
-   ...swaggerUi.serveFiles(null, swaggerUiOptions),
-   swaggerUi.setup(null, swaggerUiOptions),
+   swaggerUi.serveFiles(swaggerSpec, swaggerUiOptions),
+   swaggerUi.setup(swaggerSpec, swaggerUiOptions),
 );
 
 db.getConnection()

@@ -13,12 +13,12 @@ function resolveServerUrl(serverUrl) {
    );
    if (envUrl) return envUrl;
 
-   return `http://localhost:${process.env.PORT || 3001}`;
+   return "/";
 }
 
 function createSwaggerSpec(serverUrl) {
    const resolvedServerUrl = resolveServerUrl(serverUrl);
-   const isLocalhost = resolvedServerUrl.includes("localhost");
+   const isRelativeServer = resolvedServerUrl.startsWith("/");
 
    return swaggerJsdoc({
       definition: {
@@ -36,7 +36,9 @@ function createSwaggerSpec(serverUrl) {
          servers: [
             {
                url: resolvedServerUrl,
-               description: isLocalhost ? "Servidor local" : "Servidor atual",
+               description: isRelativeServer
+                  ? "Mesmo dominio atual"
+                  : "Servidor configurado",
             },
          ],
          components: {
