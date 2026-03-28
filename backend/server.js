@@ -102,13 +102,12 @@ function getRequestBaseUrl(req) {
    return resolveServerUrl(`${forwardedProto}://${host}`);
 }
 
-function renderSwaggerUi(req, res, next) {
-   const swaggerSpec = createSwaggerSpec(getRequestBaseUrl(req));
-   return swaggerUi.setup(
-      swaggerSpec,
-      getSwaggerUiOptions("/docs-assets"),
-   )(req, res, next);
+function attachSwaggerDoc(req, res, next) {
+   req.swaggerDoc = createSwaggerSpec(getRequestBaseUrl(req));
+   next();
 }
+
+const swaggerUiOptions = getSwaggerUiOptions("/docs-assets");
 
 app.use(securityHeadersMiddleware);
 app.use(cors(corsOptions));
@@ -121,7 +120,12 @@ app.get("/api-docs.json", (req, res) => {
    res.json(createSwaggerSpec(getRequestBaseUrl(req)));
 });
 
-app.use("/api-docs", swaggerUi.serve, renderSwaggerUi);
+app.use(
+   "/api-docs",
+   attachSwaggerDoc,
+   ...swaggerUi.serveFiles(null, swaggerUiOptions),
+   swaggerUi.setup(null, swaggerUiOptions),
+);
 
 db.getConnection()
    .then(() => console.log("Conectado ao MySQL!"))
