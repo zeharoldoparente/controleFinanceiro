@@ -279,12 +279,10 @@ function getSwaggerCustomCss(assetBaseUrl = "/docs-assets") {
    `;
 }
 
-function getSwaggerUiOptions(assetBaseUrl = "/docs-assets") {
+function createBaseSwaggerUiOptions() {
    return {
-      customCss: getSwaggerCustomCss(assetBaseUrl),
-      customJs: [`${assetBaseUrl}/swagger-custom.js`],
       customSiteTitle: "Controle Financeiro | API Docs",
-      customfavIcon: `${assetBaseUrl}/brand.svg`,
+      customfavIcon: "/docs-assets/brand.svg",
       swaggerOptions: {
          docExpansion: "list",
          defaultModelsExpandDepth: -1,
@@ -295,6 +293,22 @@ function getSwaggerUiOptions(assetBaseUrl = "/docs-assets") {
    };
 }
 
+function getSwaggerUiOptions(assetBaseUrl = "/docs-assets") {
+   return {
+      ...createBaseSwaggerUiOptions(),
+      customCss: getSwaggerCustomCss(assetBaseUrl),
+      customJs: [`${assetBaseUrl}/swagger-custom.js`],
+   };
+}
+
+function getSwaggerUiCssOnlyOptions(assetBaseUrl = "/docs-assets") {
+   return {
+      ...createBaseSwaggerUiOptions(),
+      customCss: getSwaggerCustomCss(assetBaseUrl),
+   };
+}
+
 module.exports = {
    getSwaggerUiOptions,
+   getSwaggerUiCssOnlyOptions,
 };

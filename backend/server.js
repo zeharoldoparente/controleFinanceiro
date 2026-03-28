@@ -5,22 +5,16 @@ require("dotenv").config();
 const db = require("./src/config/database");
 const swaggerUi = require("swagger-ui-express");
 const { createSwaggerSpec } = require("./swagger");
-const { getSwaggerUiOptions } = require("./src/docs/swaggerTheme");
+const {
+   getSwaggerUiOptions,
+   getSwaggerUiCssOnlyOptions,
+} = require("./src/docs/swaggerTheme");
 const securityHeadersMiddleware = require("./src/middlewares/securityHeadersMiddleware");
 const { createRateLimiter } = require("./src/middlewares/rateLimitMiddleware");
 
 const app = express();
 const swaggerSpec = createSwaggerSpec();
-const swaggerBasicUiOptions = {
-   customSiteTitle: "Controle Financeiro | API Docs",
-   swaggerOptions: {
-      docExpansion: "list",
-      defaultModelsExpandDepth: -1,
-      displayRequestDuration: true,
-      filter: true,
-      persistAuthorization: true,
-   },
-};
+const swaggerBasicUiOptions = getSwaggerUiCssOnlyOptions("/docs-assets");
 const swaggerUiOptions = getSwaggerUiOptions("/docs-assets");
 
 app.disable("x-powered-by");
