@@ -1,6 +1,7 @@
 const db = require("../config/database");
 const Mesa = require("../models/Mesa");
 const IAnPlano = require("../models/IAnPlano");
+const IAnRegistroMensal = require("../models/IAnRegistroMensal");
 const {
    getPlanoAtivoComAcompanhamento,
 } = require("../services/ianAcompanhamentoService");
@@ -397,6 +398,66 @@ class IAnController {
          return res
             .status(500)
             .json({ error: "Erro ao ativar o acompanhamento do IAn" });
+      }
+   }
+
+   static async salvarRegistroMensal(req, res) {
+      try {
+         const userId = req.userId;
+         const {
+            mesa_id: mesaIdInput,
+            referencia_mes: referenciaMesInput,
+            valor_guardado: valorGuardadoInput,
+            valor_investido: valorInvestidoInput,
+            dividendos_recebidos: dividendosRecebidosInput,
+            observacoes,
+            investimentos,
+         } = req.body || {};
+
+         if (!mesaIdInput) {
+            return res.status(400).json({
+               error: "Selecione a mesa para registrar a evolucao mensal do IAn.",
+            });
+         }
+
+         const mesa = await Mesa.findById(mesaIdInput, userId);
+         if (!mesa) {
+            return res.status(403).json({ error: "Sem acesso a esta mesa" });
+         }
+
+         const planoAtivo = await IAnPlano.findActiveByMesa(mesa.id);
+         if (!planoAtivo?.id) {
+            return res.status(400).json({
+               error: "Ative um plano do IAn antes de registrar o progresso mensal.",
+            });
+         }
+
+         await IAnRegistroMensal.upsert({
+            planoId: planoAtivo.id,
+            userId,
+            mesaId: mesa.id,
+            referenciaMes: referenciaMesInput || getMesAtual(),
+            valorGuardado: valorGuardadoInput,
+            valorInvestido: valorInvestidoInput,
+            dividendosRecebidos: dividendosRecebidosInput,
+            investimentos,
+            observacoes,
+         });
+
+         const payload = await getPlanoAtivoComAcompanhamento(userId, mesa.id);
+         return res.json(payload);
+      } catch (error) {
+         console.error("Erro ao salvar registro mensal do IAn:", error);
+
+         if (error?.message === "MES_INVALIDO") {
+            return res.status(400).json({
+               error: "Informe um mes valido no formato AAAA-MM.",
+            });
+         }
+
+         return res.status(500).json({
+            error: "Erro ao salvar o registro mensal do IAn",
+         });
       }
    }
 

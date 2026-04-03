@@ -125,6 +125,58 @@ export interface IAnAcompanhamento {
       semanais: string[];
       mensais: string[];
    };
+   progresso_meta: {
+      valor_objetivo: number;
+      patrimonio_acumulado: number;
+      total_guardado: number;
+      total_investido: number;
+      total_dividendos: number;
+      percentual_concluido: number;
+      valor_faltante: number;
+      aporte_real_medio: number;
+      ritmo_medio_mensal: number;
+      ritmo_planejado_mensal: number;
+      dividendos_estimados_mensais: number;
+      proximo_mes_projetado: number;
+      prazo_restante_meses: number;
+      conclusao_prevista_em: string | null;
+      meses_com_historico: number;
+      registros: IAnRegistroMensal[];
+      carteira_resumo: IAnCarteiraResumo[];
+   };
+}
+
+export interface IAnRegistroInvestimento {
+   nome: string;
+   codigo: string | null;
+   quantidade: number;
+   valor_unitario: number;
+   valor_total: number;
+   dividendos_estimados_mensais: number;
+}
+
+export interface IAnRegistroMensal {
+   id: number;
+   plano_id: number;
+   user_id: number;
+   mesa_id: number;
+   referencia_mes: string;
+   valor_guardado: number;
+   valor_investido: number;
+   dividendos_recebidos: number;
+   investimentos: IAnRegistroInvestimento[];
+   observacoes: string;
+   total_mes: number;
+   created_at: string;
+   updated_at: string;
+}
+
+export interface IAnCarteiraResumo {
+   nome: string;
+   codigo: string | null;
+   quantidade_total: number;
+   total_investido: number;
+   dividendos_estimados_mensais: number;
 }
 
 export interface IAnPlanoAtivoResponse {
@@ -230,6 +282,31 @@ const ianService = {
       const response = await api.post("/ian/sugestoes", {
          mesa_id: mesaId,
          plano,
+      });
+      return response.data;
+   },
+
+   salvarRegistroMensal: async (
+      mesaId: number,
+      payload: {
+         referencia_mes: string;
+         valor_guardado?: number;
+         valor_investido?: number;
+         dividendos_recebidos?: number;
+         observacoes?: string;
+         investimentos?: Array<{
+            nome: string;
+            codigo?: string | null;
+            quantidade?: number;
+            valor_unitario?: number;
+            valor_total?: number;
+            dividendos_estimados_mensais?: number;
+         }>;
+      },
+   ): Promise<IAnPlanoAtivoResponse> => {
+      const response = await api.post("/ian/registro-mensal", {
+         mesa_id: mesaId,
+         ...payload,
       });
       return response.data;
    },

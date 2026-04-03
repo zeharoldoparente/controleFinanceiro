@@ -205,6 +205,79 @@ router.post("/ativar", IAnController.salvarPlanoAtivo);
 
 /**
  * @swagger
+ * /api/ian/registro-mensal:
+ *   post:
+ *     summary: Registrar evolucao mensal da meta do IAn
+ *     description: Salva ou atualiza o fechamento de um mes com valor guardado, investimentos realizados e dividendos recebidos.
+ *     tags: [IAn]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - mesa_id
+ *             properties:
+ *               mesa_id:
+ *                 type: integer
+ *                 example: 2
+ *               referencia_mes:
+ *                 type: string
+ *                 description: Mes de referencia no formato AAAA-MM
+ *                 example: 2026-04
+ *               valor_guardado:
+ *                 type: number
+ *                 format: float
+ *                 example: 100
+ *               valor_investido:
+ *                 type: number
+ *                 format: float
+ *                 example: 300
+ *               dividendos_recebidos:
+ *                 type: number
+ *                 format: float
+ *                 example: 8.4
+ *               observacoes:
+ *                 type: string
+ *                 example: Segui a sugestao do IAn e comprei duas cotas de HGLG11.
+ *               investimentos:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     nome:
+ *                       type: string
+ *                       example: CSHG Logistica
+ *                     codigo:
+ *                       type: string
+ *                       example: HGLG11
+ *                     quantidade:
+ *                       type: number
+ *                       example: 2
+ *                     valor_unitario:
+ *                       type: number
+ *                       example: 150
+ *                     valor_total:
+ *                       type: number
+ *                       example: 300
+ *                     dividendos_estimados_mensais:
+ *                       type: number
+ *                       example: 2.6
+ *     responses:
+ *       200:
+ *         description: Registro salvo com sucesso
+ *       400:
+ *         description: Mesa invalida, plano inexistente ou mes invalido
+ *       403:
+ *         description: Sem acesso a esta mesa
+ */
+router.post("/registro-mensal", IAnController.salvarRegistroMensal);
+
+/**
+ * @swagger
  * /api/ian/sugestoes:
  *   post:
  *     summary: Gerar sugestoes de investimento do IAn

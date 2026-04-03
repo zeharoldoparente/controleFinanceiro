@@ -101,8 +101,12 @@ class IAnPlano {
 
       const planoJson = JSON.stringify(plano);
       const existente = await this.findActiveByMesa(mesaId);
+      const mesmoObjetivo =
+         existente?.objetivo_descricao &&
+         String(existente.objetivo_descricao).trim() ===
+            String(objetivoDescricao).trim();
 
-      if (existente?.id) {
+      if (existente?.id && mesmoObjetivo) {
          await db.query(
             `UPDATE ian_planos
              SET user_id = ?, objetivo_descricao = ?, estrategia_id = ?, plano_json = ?, ativo = 1
@@ -111,6 +115,15 @@ class IAnPlano {
          );
 
          return this.findActiveByMesa(mesaId);
+      }
+
+      if (existente?.id) {
+         await db.query(
+            `UPDATE ian_planos
+             SET ativo = 0
+             WHERE mesa_id = ? AND ativo = 1`,
+            [mesaId],
+         );
       }
 
       await db.query(

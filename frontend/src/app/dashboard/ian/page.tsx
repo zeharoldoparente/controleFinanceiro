@@ -8,6 +8,7 @@ import ianService, {
    type IAnAcompanhamento,
    type IAnEstrategia,
    type IAnPlano,
+   type IAnRegistroMensal,
    type IAnSugestoesInvestimentoResponse,
 } from "@/services/ianService";
 import { useMesa } from "@/contexts/MesaContext";
@@ -24,6 +25,23 @@ function plusMonths(months: number) {
    const date = new Date();
    date.setMonth(date.getMonth() + months);
    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getCurrentMonthValue() {
+   const date = new Date();
+   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthReference(value?: string | null) {
+   if (!value) return "Sem previsao";
+
+   const [year, month] = value.split("-").map(Number);
+   if (!year || !month) return value;
+
+   return new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+   }).format(new Date(year, month - 1, 1));
 }
 
 function getStatusClass(status: IAnAcompanhamento["status_geral"]) {
@@ -85,6 +103,26 @@ const sugestoes = [
    },
 ];
 
+type InvestimentoInput = {
+   nome: string;
+   codigo: string;
+   quantidade: string;
+   valorUnitario: string;
+   valorTotal: string;
+   dividendos: string;
+};
+
+function createEmptyInvestimento(): InvestimentoInput {
+   return {
+      nome: "",
+      codigo: "",
+      quantidade: "",
+      valorUnitario: "",
+      valorTotal: "",
+      dividendos: "",
+   };
+}
+
 export default function IAnPage() {
    const router = useRouter();
    const { mesaSelecionada, carregando: mesaCarregando } = useMesa();
@@ -107,6 +145,16 @@ export default function IAnPage() {
    const [erroSugestoes, setErroSugestoes] = useState("");
    const [sugestoesInvestimento, setSugestoesInvestimento] =
       useState<IAnSugestoesInvestimentoResponse | null>(null);
+   const [referenciaMesRegistro, setReferenciaMesRegistro] =
+      useState(getCurrentMonthValue());
+   const [valorGuardadoMes, setValorGuardadoMes] = useState("");
+   const [dividendosMes, setDividendosMes] = useState("");
+   const [observacoesMes, setObservacoesMes] = useState("");
+   const [investimentosMes, setInvestimentosMes] = useState<InvestimentoInput[]>(
+      [createEmptyInvestimento()],
+   );
+   const [enviandoRegistroMensal, setEnviandoRegistroMensal] = useState(false);
+   const [erroRegistroMensal, setErroRegistroMensal] = useState("");
    const chaveSugestoes = useMemo(() => {
       if (!mesaSelecionada || !plano) return "";
 
@@ -212,6 +260,66 @@ export default function IAnPage() {
       if (!plano || !estrategiaId) return null;
       return plano.estrategias.find((item) => item.id === estrategiaId) || null;
    }, [plano, estrategiaId]);
+   const registroSelecionado = useMemo<IAnRegistroMensal | null>(() => {
+      return (
+         acompanhamento?.progresso_meta.registros.find(
+            (item) => item.referencia_mes === referenciaMesRegistro,
+         ) || null
+      );
+   }, [acompanhamento, referenciaMesRegistro]);
+   const valorInvestidoCalculado = useMemo(() => {
+      return investimentosMes.reduce((acc, item) => {
+         const quantidade = Number(item.quantidade || 0);
+         const valorUnitario = Number(item.valorUnitario || 0);
+         const valorTotalInformado = Number(item.valorTotal || 0);
+         const valorTotal =
+            valorTotalInformado > 0
+               ? valorTotalInformado
+               : quantidade > 0 && valorUnitario > 0
+                 ? quantidade * valorUnitario
+                 : 0;
+
+         return acc + (Number.isFinite(valorTotal) ? valorTotal : 0);
+      }, 0);
+   }, [investimentosMes]);
+
+   useEffect(() => {
+      const registro = registroSelecionado;
+
+      if (!registro) {
+         setValorGuardadoMes("");
+         setDividendosMes("");
+         setObservacoesMes("");
+         setInvestimentosMes([createEmptyInvestimento()]);
+         return;
+      }
+
+      setValorGuardadoMes(
+         registro.valor_guardado ? String(registro.valor_guardado) : "",
+      );
+      setDividendosMes(
+         registro.dividendos_recebidos
+            ? String(registro.dividendos_recebidos)
+            : "",
+      );
+      setObservacoesMes(registro.observacoes || "");
+      setInvestimentosMes(
+         registro.investimentos.length
+            ? registro.investimentos.map((item) => ({
+                 nome: item.nome || "",
+                 codigo: item.codigo || "",
+                 quantidade: item.quantidade ? String(item.quantidade) : "",
+                 valorUnitario: item.valor_unitario
+                    ? String(item.valor_unitario)
+                    : "",
+                 valorTotal: item.valor_total ? String(item.valor_total) : "",
+                 dividendos: item.dividendos_estimados_mensais
+                    ? String(item.dividendos_estimados_mensais)
+                    : "",
+              }))
+            : [createEmptyInvestimento()],
+      );
+   }, [registroSelecionado]);
 
    const gerarPlano = async () => {
       if (!mesaSelecionada) {
@@ -284,6 +392,121 @@ export default function IAnPage() {
          );
       } finally {
          setSalvandoAcompanhamento(false);
+      }
+   };
+
+   const atualizarInvestimento = (
+      index: number,
+      field: keyof InvestimentoInput,
+      value: string,
+   ) => {
+      setInvestimentosMes((atual) =>
+         atual.map((item, itemIndex) =>
+            itemIndex === index ? { ...item, [field]: value } : item,
+         ),
+      );
+   };
+
+   const salvarRegistroMensal = async () => {
+      if (!mesaSelecionada) {
+         setErroRegistroMensal("Selecione uma mesa para registrar a evolucao.");
+         return;
+      }
+
+      if (!acompanhamento) {
+         setErroRegistroMensal(
+            "Ative uma linha do IAn antes de salvar o fechamento do mes.",
+         );
+         return;
+      }
+
+      const investimentos: Array<{
+         nome: string;
+         codigo: string | null;
+         quantidade: number;
+         valor_unitario: number;
+         valor_total: number;
+         dividendos_estimados_mensais: number;
+      }> = [];
+
+      for (const item of investimentosMes) {
+            const quantidade = Number(item.quantidade || 0);
+            const valorUnitario = Number(item.valorUnitario || 0);
+            const valorTotalInformado = Number(item.valorTotal || 0);
+            const valorTotal =
+               valorTotalInformado > 0
+                  ? valorTotalInformado
+                  : quantidade > 0 && valorUnitario > 0
+                    ? quantidade * valorUnitario
+                    : 0;
+            const dividendosEstimadosMensais = Number(item.dividendos || 0);
+
+            if (
+               !item.nome.trim() &&
+               !item.codigo.trim() &&
+               valorTotal <= 0 &&
+               dividendosEstimadosMensais <= 0
+            ) {
+               continue;
+            }
+
+            investimentos.push({
+               nome: item.nome.trim() || item.codigo.trim() || "Investimento",
+               codigo: item.codigo.trim() || null,
+               quantidade: quantidade > 0 ? quantidade : 0,
+               valor_unitario: valorUnitario > 0 ? valorUnitario : 0,
+               valor_total: valorTotal > 0 ? valorTotal : 0,
+               dividendos_estimados_mensais:
+                  dividendosEstimadosMensais > 0
+                     ? dividendosEstimadosMensais
+                     : 0,
+            });
+      }
+
+      const valorGuardado = Number(valorGuardadoMes || 0);
+      const dividendosRecebidos = Number(dividendosMes || 0);
+
+      if (
+         valorGuardado <= 0 &&
+         valorInvestidoCalculado <= 0 &&
+         dividendosRecebidos <= 0 &&
+         investimentos.length === 0 &&
+         !observacoesMes.trim()
+      ) {
+         setErroRegistroMensal(
+            "Preencha pelo menos um valor, um investimento ou uma observacao do mes.",
+         );
+         return;
+      }
+
+      setEnviandoRegistroMensal(true);
+      setErroRegistroMensal("");
+
+      try {
+         const data = await ianService.salvarRegistroMensal(mesaSelecionada.id, {
+            referencia_mes: referenciaMesRegistro,
+            valor_guardado: valorGuardado > 0 ? valorGuardado : 0,
+            valor_investido: valorInvestidoCalculado > 0 ? valorInvestidoCalculado : 0,
+            dividendos_recebidos: dividendosRecebidos > 0 ? dividendosRecebidos : 0,
+            observacoes: observacoesMes.trim(),
+            investimentos,
+         });
+
+         if (data.plano_ativo?.plano) {
+            setPlano(data.plano_ativo.plano);
+            setAcompanhamento(data.acompanhamento);
+            setEstrategiaId(data.plano_ativo.estrategia_id);
+         }
+      } catch (error) {
+         setErroRegistroMensal(
+            isApiError(error)
+               ? error.response?.data?.error ||
+                    error.response?.data?.message ||
+                    "Nao foi possivel salvar o fechamento do mes."
+               : "Nao foi possivel salvar o fechamento do mes.",
+         );
+      } finally {
+         setEnviandoRegistroMensal(false);
       }
    };
 
@@ -1085,6 +1308,497 @@ export default function IAnPage() {
                               </div>
                            </div>
                         )}
+                     </section>
+                  )}
+
+                  {acompanhamento && (
+                     <section className="grid gap-4 xl:grid-cols-[1.04fr_0.96fr]">
+                        <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                           <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                    Evolucao da meta
+                                 </p>
+                                 <h3 className="mt-2 text-2xl font-bold text-gray-900">
+                                    O IAn agora soma o que virou patrimonio real.
+                                 </h3>
+                              </div>
+                              <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
+                                 {acompanhamento.progresso_meta.percentual_concluido.toFixed(
+                                    1,
+                                 )}
+                                 % concluido
+                              </div>
+                           </div>
+
+                           <div className="mt-5 overflow-hidden rounded-full bg-gray-100">
+                              <div
+                                 className="h-3 rounded-full bg-gradient-to-r from-emerald-500 to-green-400"
+                                 style={{
+                                    width: `${Math.min(
+                                       100,
+                                       acompanhamento.progresso_meta.percentual_concluido,
+                                    )}%`,
+                                 }}
+                              />
+                           </div>
+
+                           <div className="mt-5 grid gap-3 md:grid-cols-3">
+                              <div className="rounded-2xl bg-gray-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                    Patrimonio acumulado
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-gray-900">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta
+                                          .patrimonio_acumulado,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-gray-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                    Falta para a meta
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-gray-900">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta.valor_faltante,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-gray-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                    Proximo mes projetado
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-gray-900">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta
+                                          .proximo_mes_projetado,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Total guardado
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta.total_guardado,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Total investido
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta.total_investido,
+                                    )}
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl bg-emerald-50 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">
+                                    Dividendos
+                                 </p>
+                                 <p className="mt-2 text-lg font-bold text-emerald-950">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta
+                                          .total_dividendos,
+                                    )}
+                                 </p>
+                              </div>
+                           </div>
+
+                           <div className="mt-6 grid gap-3 md:grid-cols-3">
+                              <div className="rounded-2xl border border-gray-100 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                    Ritmo medio real
+                                 </p>
+                                 <p className="mt-2 text-sm font-semibold text-gray-900">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta
+                                          .ritmo_medio_mensal,
+                                    )}
+                                    /mes
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl border border-gray-100 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                    Dividendos estimados
+                                 </p>
+                                 <p className="mt-2 text-sm font-semibold text-gray-900">
+                                    {formatCurrency(
+                                       acompanhamento.progresso_meta
+                                          .dividendos_estimados_mensais,
+                                    )}
+                                    /mes
+                                 </p>
+                              </div>
+                              <div className="rounded-2xl border border-gray-100 p-4">
+                                 <p className="text-xs uppercase tracking-[0.14em] text-gray-400">
+                                    Conclusao prevista
+                                 </p>
+                                 <p className="mt-2 text-sm font-semibold text-gray-900">
+                                    {acompanhamento.progresso_meta
+                                       .prazo_restante_meses > 0
+                                       ? `${acompanhamento.progresso_meta.prazo_restante_meses} meses · ${formatMonthReference(
+                                            acompanhamento.progresso_meta
+                                               .conclusao_prevista_em,
+                                         )}`
+                                       : "meta batida ou sem previsao"}
+                                 </p>
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                              Fechamento mensal
+                           </p>
+                           <h3 className="mt-2 text-2xl font-bold text-gray-900">
+                              Registre o que voce construiu neste mes.
+                           </h3>
+                           <p className="mt-3 text-sm leading-6 text-gray-600">
+                              Aqui entra o que voce guardou, investiu e recebeu
+                              de dividendos. O Ian usa isso para recalcular o
+                              quanto falta e o prazo provavel da meta.
+                           </p>
+
+                           <div className="mt-5 space-y-4">
+                              <input
+                                 type="month"
+                                 value={referenciaMesRegistro}
+                                 onChange={(event) =>
+                                    setReferenciaMesRegistro(event.target.value)
+                                 }
+                                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                              />
+
+                              <div className="grid gap-4 md:grid-cols-2">
+                                 <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={valorGuardadoMes}
+                                    onChange={(event) =>
+                                       setValorGuardadoMes(event.target.value)
+                                    }
+                                    placeholder="Quanto guardei no mes"
+                                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                 />
+                                 <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={dividendosMes}
+                                    onChange={(event) =>
+                                       setDividendosMes(event.target.value)
+                                    }
+                                    placeholder="Dividendos recebidos"
+                                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                 />
+                              </div>
+
+                              <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 p-4">
+                                 <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <p className="text-sm font-semibold text-emerald-900">
+                                       Investimentos do mes
+                                    </p>
+                                    <button
+                                       type="button"
+                                       onClick={() =>
+                                          setInvestimentosMes((atual) => [
+                                             ...atual,
+                                             createEmptyInvestimento(),
+                                          ])
+                                       }
+                                       className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700"
+                                    >
+                                       Adicionar ativo
+                                    </button>
+                                 </div>
+
+                                 <div className="mt-4 space-y-3">
+                                    {investimentosMes.map((item, index) => (
+                                       <div
+                                          key={`investimento-${index}`}
+                                          className="rounded-2xl bg-white p-4"
+                                       >
+                                          <div className="grid gap-3 md:grid-cols-2">
+                                             <input
+                                                type="text"
+                                                value={item.nome}
+                                                onChange={(event) =>
+                                                   atualizarInvestimento(
+                                                      index,
+                                                      "nome",
+                                                      event.target.value,
+                                                   )
+                                                }
+                                                placeholder="Nome do ativo"
+                                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                             />
+                                             <input
+                                                type="text"
+                                                value={item.codigo}
+                                                onChange={(event) =>
+                                                   atualizarInvestimento(
+                                                      index,
+                                                      "codigo",
+                                                      event.target.value,
+                                                   )
+                                                }
+                                                placeholder="Ticker (opcional)"
+                                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm uppercase text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                             />
+                                             <input
+                                                type="number"
+                                                min="0"
+                                                step="0.0001"
+                                                value={item.quantidade}
+                                                onChange={(event) =>
+                                                   atualizarInvestimento(
+                                                      index,
+                                                      "quantidade",
+                                                      event.target.value,
+                                                   )
+                                                }
+                                                placeholder="Quantidade"
+                                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                             />
+                                             <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={item.valorUnitario}
+                                                onChange={(event) =>
+                                                   atualizarInvestimento(
+                                                      index,
+                                                      "valorUnitario",
+                                                      event.target.value,
+                                                   )
+                                                }
+                                                placeholder="Valor unitario"
+                                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                             />
+                                             <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={item.valorTotal}
+                                                onChange={(event) =>
+                                                   atualizarInvestimento(
+                                                      index,
+                                                      "valorTotal",
+                                                      event.target.value,
+                                                   )
+                                                }
+                                                placeholder="Valor total investido"
+                                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                             />
+                                             <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={item.dividendos}
+                                                onChange={(event) =>
+                                                   atualizarInvestimento(
+                                                      index,
+                                                      "dividendos",
+                                                      event.target.value,
+                                                   )
+                                                }
+                                                placeholder="Dividendo medio mensal"
+                                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                                             />
+                                          </div>
+
+                                          {investimentosMes.length > 1 && (
+                                             <button
+                                                type="button"
+                                                onClick={() =>
+                                                   setInvestimentosMes((atual) =>
+                                                      atual.filter(
+                                                         (_, itemIndex) =>
+                                                            itemIndex !== index,
+                                                      ),
+                                                   )
+                                                }
+                                                className="mt-3 text-xs font-semibold text-rose-600"
+                                             >
+                                                Remover este ativo
+                                             </button>
+                                          )}
+                                       </div>
+                                    ))}
+                                 </div>
+
+                                 <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-gray-700">
+                                    Total investido no mes{" "}
+                                    <span className="font-bold text-gray-900">
+                                       {formatCurrency(valorInvestidoCalculado)}
+                                    </span>
+                                 </div>
+                              </div>
+
+                              <textarea
+                                 value={observacoesMes}
+                                 onChange={(event) =>
+                                    setObservacoesMes(event.target.value)
+                                 }
+                                 rows={3}
+                                 placeholder="Ex: consegui segurar o delivery e comprei 2 cotas de HGLG11."
+                                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+                              />
+
+                              {erroRegistroMensal && (
+                                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                    {erroRegistroMensal}
+                                 </div>
+                              )}
+
+                              <button
+                                 onClick={salvarRegistroMensal}
+                                 disabled={enviandoRegistroMensal}
+                                 className="rounded-2xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                 {enviandoRegistroMensal
+                                    ? "Salvando fechamento..."
+                                    : "Salvar fechamento mensal"}
+                              </button>
+                           </div>
+                        </div>
+                     </section>
+                  )}
+
+                  {acompanhamento && (
+                     <section className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
+                        <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                              Historico mensal
+                           </p>
+                           <div className="mt-4 space-y-3">
+                              {acompanhamento.progresso_meta.registros.length ===
+                              0 ? (
+                                 <div className="rounded-2xl border border-dashed border-gray-200 p-5 text-sm text-gray-500">
+                                    O primeiro fechamento mensal vai inaugurar a
+                                    memoria financeira do Ian para esta meta.
+                                 </div>
+                              ) : (
+                                 acompanhamento.progresso_meta.registros.map(
+                                    (registro) => (
+                                       <div
+                                          key={registro.id}
+                                          className="rounded-2xl border border-gray-100 p-4"
+                                       >
+                                          <div className="flex flex-wrap items-start justify-between gap-3">
+                                             <div>
+                                                <p className="text-sm font-semibold text-gray-900">
+                                                   {formatMonthReference(
+                                                      registro.referencia_mes,
+                                                   )}
+                                                </p>
+                                                <p className="mt-1 text-xs text-gray-400">
+                                                   Guardado{" "}
+                                                   {formatCurrency(
+                                                      registro.valor_guardado,
+                                                   )}{" "}
+                                                   · investido{" "}
+                                                   {formatCurrency(
+                                                      registro.valor_investido,
+                                                   )}{" "}
+                                                   · dividendos{" "}
+                                                   {formatCurrency(
+                                                      registro.dividendos_recebidos,
+                                                   )}
+                                                </p>
+                                             </div>
+                                             <p className="text-sm font-bold text-emerald-700">
+                                                +{formatCurrency(registro.total_mes)}
+                                             </p>
+                                          </div>
+
+                                          {registro.investimentos.length > 0 && (
+                                             <div className="mt-3 flex flex-wrap gap-2">
+                                                {registro.investimentos.map(
+                                                   (item) => (
+                                                      <span
+                                                         key={`${registro.id}-${item.codigo || item.nome}`}
+                                                         className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700"
+                                                      >
+                                                         {item.codigo ||
+                                                            item.nome}{" "}
+                                                         {item.quantidade > 0
+                                                            ? `· ${item.quantidade}`
+                                                            : ""}
+                                                      </span>
+                                                   ),
+                                                )}
+                                             </div>
+                                          )}
+
+                                          {registro.observacoes && (
+                                             <p className="mt-3 text-sm leading-6 text-gray-600">
+                                                {registro.observacoes}
+                                             </p>
+                                          )}
+                                       </div>
+                                    ),
+                                 )
+                              )}
+                           </div>
+                        </div>
+
+                        <div className="rounded-[26px] border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                              Carteira que o Ian enxergou
+                           </p>
+                           <div className="mt-4 space-y-3">
+                              {acompanhamento.progresso_meta.carteira_resumo.length ===
+                              0 ? (
+                                 <div className="rounded-2xl border border-dashed border-gray-200 p-5 text-sm text-gray-500">
+                                    Quando voce registrar ativos comprados, o
+                                    Ian vai consolidar a carteira aqui.
+                                 </div>
+                              ) : (
+                                 acompanhamento.progresso_meta.carteira_resumo.map(
+                                    (item) => (
+                                       <div
+                                          key={item.codigo || item.nome}
+                                          className="rounded-2xl bg-gray-50 p-4"
+                                       >
+                                          <div className="flex items-start justify-between gap-3">
+                                             <div>
+                                                <p className="text-sm font-semibold text-gray-900">
+                                                   {item.codigo
+                                                      ? `${item.codigo} · ${item.nome}`
+                                                      : item.nome}
+                                                </p>
+                                                <p className="mt-1 text-xs text-gray-400">
+                                                   Quantidade acumulada{" "}
+                                                   {item.quantidade_total}
+                                                </p>
+                                             </div>
+                                             <div className="text-right">
+                                                <p className="text-sm font-bold text-gray-900">
+                                                   {formatCurrency(
+                                                      item.total_investido,
+                                                   )}
+                                                </p>
+                                                <p className="mt-1 text-xs text-emerald-700">
+                                                   {formatCurrency(
+                                                      item.dividendos_estimados_mensais,
+                                                   )}{" "}
+                                                   /mes estimado
+                                                </p>
+                                             </div>
+                                          </div>
+                                       </div>
+                                    ),
+                                 )
+                              )}
+                           </div>
+                        </div>
                      </section>
                   )}
 

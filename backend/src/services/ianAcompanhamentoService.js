@@ -1,5 +1,6 @@
 const db = require("../config/database");
 const IAnPlano = require("../models/IAnPlano");
+const IAnRegistroMensal = require("../models/IAnRegistroMensal");
 const Notificacao = require("../models/Notificacao");
 
 function safeNumber(value) {
@@ -12,6 +13,10 @@ function formatMoney(value) {
       style: "currency",
       currency: "BRL",
    }).format(safeNumber(value));
+}
+
+function roundMoney(value) {
+   return Math.round(safeNumber(value) * 100) / 100;
 }
 
 function getCurrentMonth() {
@@ -40,6 +45,130 @@ function getWeekReference() {
    const diffDays = Math.floor((today - firstDay) / 86400000);
    const week = Math.ceil((diffDays + firstDay.getDay() + 1) / 7);
    return `${today.getFullYear()}-${String(week).padStart(2, "0")}`;
+}
+
+function addMonthsToReference(referenciaMes, monthsToAdd) {
+   const [year, month] = String(referenciaMes || "").split("-").map(Number);
+   if (!year || !month) return null;
+
+   const date = new Date(year, month - 1 + Math.max(0, monthsToAdd), 1);
+   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function calculateMetaProgress(planoSalvo, estrategia, registros) {
+   const valorObjetivo = safeNumber(planoSalvo?.plano?.objetivo?.valor_objetivo);
+   const totalGuardado = registros.reduce(
+      (acc, item) => acc + safeNumber(item.valor_guardado),
+      0,
+   );
+   const totalInvestido = registros.reduce(
+      (acc, item) => acc + safeNumber(item.valor_investido),
+      0,
+   );
+   const totalDividendos = registros.reduce(
+      (acc, item) => acc + safeNumber(item.dividendos_recebidos),
+      0,
+   );
+   const patrimonioAcumulado = totalGuardado + totalInvestido + totalDividendos;
+
+   const carteiraMap = new Map();
+
+   for (const registro of registros) {
+      for (const investimento of registro.investimentos || []) {
+         const key = investimento.codigo || investimento.nome;
+         if (!key) continue;
+
+         const existente = carteiraMap.get(key) || {
+            nome: investimento.nome || investimento.codigo || "Investimento",
+            codigo: investimento.codigo || null,
+            quantidade_total: 0,
+            total_investido: 0,
+            dividendos_estimados_mensais: 0,
+         };
+
+         existente.quantidade_total += safeNumber(investimento.quantidade);
+         existente.total_investido += safeNumber(investimento.valor_total);
+         existente.dividendos_estimados_mensais += safeNumber(
+            investimento.dividendos_estimados_mensais,
+         );
+
+         carteiraMap.set(key, existente);
+      }
+   }
+
+   const carteiraResumo = Array.from(carteiraMap.values())
+      .map((item) => ({
+         ...item,
+         quantidade_total: roundMoney(item.quantidade_total),
+         total_investido: roundMoney(item.total_investido),
+         dividendos_estimados_mensais: roundMoney(
+            item.dividendos_estimados_mensais,
+         ),
+      }))
+      .sort((a, b) => b.total_investido - a.total_investido);
+
+   const dividendosEstimadosMensais = carteiraResumo.reduce(
+      (acc, item) => acc + safeNumber(item.dividendos_estimados_mensais),
+      0,
+   );
+   const mesesComHistorico = registros.length;
+   const aporteRealMedio =
+      mesesComHistorico > 0
+         ? (totalGuardado + totalInvestido) / mesesComHistorico
+         : safeNumber(estrategia?.projecao_composta?.aporte_mensal);
+   const ritmoMedioMensal =
+      mesesComHistorico > 0
+         ? patrimonioAcumulado / mesesComHistorico
+         : safeNumber(estrategia?.projecao_composta?.aporte_mensal);
+   const ritmoProjetadoMensal = Math.max(
+      aporteRealMedio + dividendosEstimadosMensais,
+      safeNumber(estrategia?.projecao_composta?.aporte_mensal),
+      1,
+   );
+   const valorFaltante = Math.max(0, valorObjetivo - patrimonioAcumulado);
+   const percentualConcluido =
+      valorObjetivo > 0
+         ? Math.min(100, (patrimonioAcumulado / valorObjetivo) * 100)
+         : 0;
+   const prazoRestanteMeses =
+      valorFaltante > 0 ? Math.ceil(valorFaltante / ritmoProjetadoMensal) : 0;
+   const conclusaoPrevistaEm =
+      valorObjetivo > 0
+         ? addMonthsToReference(getCurrentMonth(), prazoRestanteMeses)
+         : null;
+   const proximoMesProjetado =
+      patrimonioAcumulado + aporteRealMedio + dividendosEstimadosMensais;
+
+   const registrosFormatados = registros.map((registro) => ({
+      ...registro,
+      total_mes: roundMoney(
+         safeNumber(registro.valor_guardado) +
+            safeNumber(registro.valor_investido) +
+            safeNumber(registro.dividendos_recebidos),
+      ),
+   }));
+
+   return {
+      valor_objetivo: roundMoney(valorObjetivo),
+      patrimonio_acumulado: roundMoney(patrimonioAcumulado),
+      total_guardado: roundMoney(totalGuardado),
+      total_investido: roundMoney(totalInvestido),
+      total_dividendos: roundMoney(totalDividendos),
+      percentual_concluido: roundMoney(percentualConcluido),
+      valor_faltante: roundMoney(valorFaltante),
+      aporte_real_medio: roundMoney(aporteRealMedio),
+      ritmo_medio_mensal: roundMoney(ritmoMedioMensal),
+      ritmo_planejado_mensal: roundMoney(
+         safeNumber(estrategia?.projecao_composta?.aporte_mensal),
+      ),
+      dividendos_estimados_mensais: roundMoney(dividendosEstimadosMensais),
+      proximo_mes_projetado: roundMoney(proximoMesProjetado),
+      prazo_restante_meses: prazoRestanteMeses,
+      conclusao_prevista_em: conclusaoPrevistaEm,
+      registros: registrosFormatados,
+      carteira_resumo: carteiraResumo.slice(0, 6),
+      meses_com_historico: mesesComHistorico,
+   };
 }
 
 function getStrategyFromPlan(planoSalvo) {
@@ -208,6 +337,8 @@ async function buildAcompanhamento(planoSalvo) {
       categoryNames,
    );
    const { weeklyRows, today } = await getWindowAndWeeklySignals(mesaId);
+   const registros = await IAnRegistroMensal.listByPlan(planoSalvo.id);
+   const progressoMeta = calculateMetaProgress(planoSalvo, estrategia, registros);
 
    const diarios = [];
    const semanais = [];
@@ -266,6 +397,16 @@ async function buildAcompanhamento(planoSalvo) {
       );
    }
 
+   if (progressoMeta.meses_com_historico > 0) {
+      mensais.push(
+         `Voce ja acumulou ${formatMoney(progressoMeta.patrimonio_acumulado)} para a meta, o que representa ${progressoMeta.percentual_concluido.toFixed(1)}% do objetivo.`,
+      );
+   } else {
+      mensais.push(
+         "Assim que voce registrar o fechamento do mes, o IAn passa a medir o quanto da meta ja virou patrimonio real.",
+      );
+   }
+
    if (statusGeral === "fora_do_rumo") {
       mensais.push(
          `Seu mes esta ${formatMoney(desvioAtual)} acima do ritmo planejado. O corte precisa vir das categorias mais flexiveis primeiro.`,
@@ -301,16 +442,14 @@ async function buildAcompanhamento(planoSalvo) {
               ? "O plano ainda e recuperavel, mas o ritmo pede disciplina agora."
               : "Seu comportamento esta alinhado com a estrategia ativa.",
       indicadores: {
-         gasto_mes_atual: Math.round(gastoAtualMes * 100) / 100,
-         gasto_esperado_ate_agora:
-            Math.round(gastoEsperadoAteAgora * 100) / 100,
-         desvio_atual: Math.round(desvioAtual * 100) / 100,
-         gasto_cartao_semana: Math.round(weeklyCardTotal * 100) / 100,
-         gasto_hoje: Math.round(today.total * 100) / 100,
-         restante_sugerido_mes: Math.round(
-            Math.max(0, gastoAlvoMes - gastoAtualMes) * 100,
-         ) / 100,
+         gasto_mes_atual: roundMoney(gastoAtualMes),
+         gasto_esperado_ate_agora: roundMoney(gastoEsperadoAteAgora),
+         desvio_atual: roundMoney(desvioAtual),
+         gasto_cartao_semana: roundMoney(weeklyCardTotal),
+         gasto_hoje: roundMoney(today.total),
+         restante_sugerido_mes: roundMoney(Math.max(0, gastoAlvoMes - gastoAtualMes)),
       },
+      progresso_meta: progressoMeta,
       categorias_em_alerta: categoriasEmAlerta.slice(0, 3),
       alertas: {
          diarios: diarios.slice(0, 3),
