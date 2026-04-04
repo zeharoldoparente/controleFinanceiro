@@ -1,59 +1,163 @@
-# Backend - Controle Financeiro
+# 🖥️ Controle Financeiro - Backend
 
-API REST do projeto Controle Financeiro. Ela centraliza autenticacao, regras de negocio, persistencia em MySQL, documentacao Swagger e o motor do IAn.
+> API RESTful do sistema de controle financeiro, com autenticação completa, mesas colaborativas, gestão financeira detalhada, notificações, emails transacionais e o IAn como motor inteligente de planejamento e acompanhamento.
 
-## Stack
+![Node.js](https://img.shields.io/badge/Node.js-v20+-green)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-blue)
+![Express](https://img.shields.io/badge/Express-5.x-lightgrey)
+![JWT](https://img.shields.io/badge/JWT-Auth-orange)
+![Swagger](https://img.shields.io/badge/Swagger-Docs-brightgreen)
 
-- Node.js
-- Express 5
-- MySQL 8
-- JWT
-- bcryptjs
-- Nodemailer
-- Multer
-- Swagger UI / Swagger JSDoc
+---
 
-## O que a API faz hoje
+## 📋 Sobre o Projeto
 
-- autentica usuarios com JWT;
-- valida email, recupera senha e suporta troca de email;
-- gerencia mesas colaborativas e seus membros;
-- controla receitas, despesas, cartoes, bandeiras, tipos e formas de pagamento;
-- gera e paga faturas;
-- dispara notificacoes e emails transacionais;
-- entrega dashboard financeiro por mesa;
-- executa o IAn, com plano, acompanhamento e historico mensal da meta.
+A API do **Controle Financeiro** foi construída em Node.js e Express para centralizar a lógica de negócio da aplicação, oferecendo recursos para autenticação, colaboração por mesas, operações financeiras, notificações e acompanhamento de metas com o **IAn**.
 
-## Estrutura principal
+### ✨ Principais Diferenciais
+
+- 🔐 **Autenticação completa** com verificação de email e recuperação de senha
+- 👥 **Mesas colaborativas** para gestão financeira em grupo
+- 📧 **Emails transacionais** para verificação, convites e segurança da conta
+- 📸 **Upload de comprovantes** em despesas pagas
+- 🔔 **Notificações in-app** com alertas automáticos
+- 📊 **Dashboard consolidado** por mesa
+- 🧠 **IAn dinâmico** com plano, acompanhamento e histórico mensal da meta
+- 📝 **Swagger** com documentação interativa da API
+
+---
+
+## 🚀 Tecnologias Utilizadas
+
+### Core
+
+- **Node.js**
+- **Express 5**
+- **MySQL 8**
+
+### Autenticação e Segurança
+
+- **jsonwebtoken**
+- **bcryptjs**
+- **CORS**
+- **Rate limiting customizado**
+
+### Upload e Email
+
+- **Multer**
+- **Nodemailer**
+
+### Documentação
+
+- **Swagger UI Express**
+- **Swagger JSDoc**
+
+### Utilidades
+
+- **dotenv**
+- **uuid**
+
+---
+
+## 📁 Estrutura do Projeto
 
 ```text
 backend/
-|-- database/
-|-- public/
-|-- src/
-|   |-- config/
-|   |-- controllers/
-|   |-- docs/
-|   |-- middlewares/
-|   |-- models/
-|   |-- routes/
-|   |-- services/
-|   `-- utils/
-|-- .env.example
-|-- package.json
-|-- server.js
-`-- swagger.js
+├── database/
+│   └── schema.sql
+├── public/
+├── src/
+│   ├── config/
+│   │   └── database.js
+│   ├── controllers/
+│   ├── docs/
+│   ├── middlewares/
+│   ├── models/
+│   ├── routes/
+│   ├── services/
+│   └── utils/
+├── .env.example
+├── package.json
+├── server.js
+└── swagger.js
 ```
 
-## Instalar e rodar
+Hoje o backend possui módulos para:
+
+- autenticação
+- mesas e membros
+- categorias
+- formas e tipos de pagamento
+- bandeiras
+- cartões
+- receitas
+- despesas
+- faturas
+- convites
+- notificações
+- dashboard
+- conta
+- IAn
+
+---
+
+## 🗄️ Banco de Dados
+
+### Schema principal
+
+O schema principal em `database/schema.sql` cria tabelas como:
+
+| Tabela               | Descrição                                              |
+| -------------------- | ------------------------------------------------------ |
+| `users`              | Usuários do sistema                                    |
+| `tokens_verificacao` | Tokens de verificação e recuperação                    |
+| `mesas`              | Mesas de controle financeiro                           |
+| `mesa_usuarios`      | Relação entre usuários e mesas                         |
+| `categorias`         | Categorias de receitas e despesas                      |
+| `bandeiras`          | Bandeiras de cartão                                    |
+| `tipos_pagamento`    | Tipos de pagamento                                     |
+| `cartoes`            | Cartões do usuário                                     |
+| `faturas`            | Faturas mensais                                        |
+| `receitas`           | Receitas financeiras                                   |
+| `despesas`           | Despesas financeiras                                   |
+| `convites`           | Convites de mesas                                      |
+| `notificacoes`       | Notificações e alertas                                 |
+
+### Tabelas extras do IAn
+
+O IAn adiciona tabelas criadas automaticamente no primeiro uso:
+
+| Tabela                  | Descrição                                                       |
+| ----------------------- | --------------------------------------------------------------- |
+| `ian_planos`            | Guarda o plano ativo, objetivo, estratégia e payload do IAn     |
+| `ian_registros_mensais` | Guarda os fechamentos mensais informados pelo usuário           |
+
+Essas tabelas são **auto provisionadas pelo backend** e não exigem migração manual separada.
+
+---
+
+## ⚙️ Instalação e Configuração
+
+### Pré-requisitos
+
+- Node.js 18+
+- MySQL 8.0+
+- Conta SMTP para envio de email
+
+### Passo 1: Instale as dependências
 
 ```bash
 cd backend
 npm install
+```
+
+### Passo 2: Configure o ambiente
+
+```bash
 cp .env.example .env
 ```
 
-Depois configure o `.env`:
+Exemplo:
 
 ```env
 PORT=3001
@@ -70,90 +174,136 @@ EMAIL_PASSWORD=sua_senha_de_app_gmail
 EMAIL_FROM=Controle Financeiro <seu_email@gmail.com>
 
 APP_URL=http://localhost:3001
-
 FRONTEND_URL=http://localhost:3000
-# ou varias URLs separadas por virgula
-# FRONTEND_URLS=https://seu-front.vercel.app,https://outro-dominio.com
 
-# opcional, usado pelo IAn para enriquecer sugestoes com cotacoes
+# Opcional para sugestões com cotação
 BRAPI_TOKEN=
 ```
 
-### Banco principal
+### Passo 3: Crie o banco
 
 ```bash
 mysql -u root -p < database/schema.sql
 ```
 
-### Subir a API
+### Passo 4: Inicie a API
 
-Desenvolvimento:
+**Desenvolvimento:**
 
 ```bash
 npm run dev
 ```
 
-Producao:
+**Produção:**
 
 ```bash
 npm start
 ```
 
-API em `http://localhost:3001`.
+API em: **http://localhost:3001**
 
-## Swagger
+---
+
+## 📚 Documentação da API
+
+A documentação interativa está disponível em:
 
 - `http://localhost:3001/api-docs`
 - `http://localhost:3001/api-docs-fancy`
-- spec JSON: `http://localhost:3001/api-docs.json`
+- `http://localhost:3001/api-docs.json`
 
-## Banco de dados
+---
 
-O schema principal continua vindo de `database/schema.sql`, com tabelas como:
+## 🔐 Autenticação
 
-- `users`
-- `tokens_verificacao`
-- `mesas`
-- `mesa_usuarios`
-- `categorias`
-- `cartoes`
-- `faturas`
-- `receitas`
-- `despesas`
-- `convites`
-- `notificacoes`
+A API utiliza **JWT** para autenticação.
 
-O IAn adiciona tabelas extras sob demanda:
+Fluxo básico:
 
-- `ian_planos`: guarda o plano ativo e seu payload consolidado;
-- `ian_registros_mensais`: guarda a evolucao mensal da meta, com valor guardado, investimentos, dividendos e observacoes.
+1. O usuário faz cadastro
+2. Verifica o email
+3. Realiza login
+4. Usa `Authorization: Bearer <token>` nas rotas protegidas
 
-Essas tabelas sao criadas automaticamente na primeira utilizacao do IAn e nao exigem migracao manual separada.
+---
 
-## Modulos de rota
+## 🎯 Funcionalidades Principais
 
-Os grupos principais de rota hoje sao:
+### 1. 🔐 Autenticação e Conta
 
-- `/api/auth`
-- `/api/mesa`
-- `/api/mesa/:mesa_id/membros`
-- `/api/categorias`
-- `/api/formas-pagamento`
-- `/api/tipos-pagamento`
-- `/api/bandeiras`
-- `/api/cartoes`
-- `/api/receitas`
-- `/api/despesas`
-- `/api/faturas`
-- `/api/convites`
-- `/api/notificacoes`
-- `/api/dashboard`
-- `/api/conta`
-- `/api/ian`
+- ✅ Registro, login e verificação de email
+- ✅ Recuperação e redefinição de senha
+- ✅ Troca de senha e troca de email
+- ✅ Perfil, foto, preferências e suporte
 
-## IAn
+### 2. 👥 Mesas e Colaboração
 
-O backend do IAn cobre cinco fluxos principais:
+- ✅ Criar, listar, editar e excluir mesas
+- ✅ Gerenciar membros
+- ✅ Enviar e responder convites
+- ✅ Aplicar permissões por papel
+
+### 3. 💰 Operações Financeiras
+
+- ✅ Receitas com confirmação e recorrência
+- ✅ Despesas com pagamento, recorrência e parcelamento
+- ✅ Cartões, limites e vencimentos
+- ✅ Faturas com pagamento consolidado
+- ✅ Categorias e meios de pagamento
+
+### 4. 🔔 Notificações e Alertas
+
+- ✅ Sininho com contagem de não lidas
+- ✅ Marcação individual e em lote
+- ✅ Alertas financeiros automáticos
+
+### 5. 🧠 IAn
+
+- ✅ Geração de plano financeiro
+- ✅ Estratégias por objetivo
+- ✅ Acompanhamento diário, semanal e mensal
+- ✅ Sugestões de aplicação para pesquisa
+- ✅ Registro mensal da evolução da meta
+- ✅ Cálculo de patrimônio acumulado, percentual concluído e valor faltante
+- ✅ Projeção de prazo com base no histórico informado
+- ✅ Resumo consolidado da carteira do usuário
+
+---
+
+## 📡 Principais Rotas
+
+### Autenticação
+
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/verificar-email/:token
+POST   /api/auth/reenviar-verificacao
+POST   /api/auth/solicitar-recuperacao-senha
+POST   /api/auth/resetar-senha/:token
+```
+
+### Mesas
+
+```text
+GET    /api/mesa
+POST   /api/mesa
+GET    /api/mesa/:id
+PUT    /api/mesa/:id
+DELETE /api/mesa/:id
+```
+
+### Financeiro
+
+```text
+POST   /api/receitas
+POST   /api/despesas
+PATCH  /api/despesas/:id/pagar
+PATCH  /api/faturas/:id/pagar
+GET    /api/dashboard
+```
+
+### IAn
 
 ```text
 GET    /api/ian/plano-ativo
@@ -163,28 +313,21 @@ POST   /api/ian/registro-mensal
 POST   /api/ian/sugestoes
 ```
 
-Capacidades atuais do IAn:
+---
 
-- gerar plano financeiro com diagnostico e estrategias;
-- salvar uma estrategia ativa por mesa;
-- acompanhar o comportamento atual com alertas diarios, semanais e mensais;
-- registrar o fechamento mensal da meta;
-- calcular patrimonio acumulado, percentual concluido, valor faltante e previsao de conclusao;
-- consolidar resumo da carteira com base no historico informado pelo usuario;
-- sugerir ativos para pesquisa com contexto financeiro e, opcionalmente, cotacoes do mercado.
+## 🔒 Segurança
 
-## Middlewares e seguranca
+- ✅ JWT para autenticação
+- ✅ bcrypt para senhas
+- ✅ Prepared statements no MySQL
+- ✅ Headers de segurança
+- ✅ CORS por ambiente
+- ✅ Rate limiting para autenticação, financeiro e convites
+- ✅ Upload validado para comprovantes
 
-O backend aplica:
+---
 
-- autenticacao por JWT;
-- headers de seguranca;
-- CORS com `FRONTEND_URL` e `FRONTEND_URLS`;
-- rate limit global, de autenticacao, financeiro e de convites;
-- prepared statements no acesso ao banco;
-- upload validado para comprovantes.
-
-## Scripts
+## 🧪 Scripts Disponíveis
 
 ```bash
 npm run dev
@@ -192,14 +335,32 @@ npm start
 npm test
 ```
 
-Observacao:
+Observação:
 
-- `npm test` ainda e apenas um placeholder no `package.json`.
+- `npm test` ainda é apenas um placeholder.
 
-## Ponto de atencao
+---
 
-Se voce estiver documentando endpoints manualmente fora do Swagger, prefira sempre validar pelo codigo em `server.js` e pelos arquivos de `src/routes/`, porque os prefixos de algumas entidades usam singular (`/api/mesa`) e nao plural.
+## 🚀 Deploy
 
-## Licenca
+### Plataformas Recomendadas
 
-Este modulo segue a licenca MIT do projeto principal.
+- **Railway**
+- **Render**
+- **DigitalOcean**
+- **AWS**
+
+### Checklist de Produção
+
+1. Configurar variáveis de ambiente
+2. Ajustar CORS para os domínios oficiais
+3. Configurar HTTPS
+4. Validar envio de email
+5. Configurar backup do banco
+6. Monitorar logs, limites e erros
+
+---
+
+## 📝 Licença
+
+Este módulo segue a licença MIT do projeto principal.

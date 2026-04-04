@@ -1,61 +1,102 @@
-# Frontend - Controle Financeiro
+# 🖥️ Controle Financeiro - Frontend
 
-Aplicacao web do Controle Financeiro, feita com Next.js 16, React 19 e TypeScript.
+> Interface web moderna do sistema de controle financeiro, com dashboard analítico, gestão de mesas, receitas, despesas, cartões, faturas, notificações e a experiência completa do IAn.
 
-## Objetivo
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![React](https://img.shields.io/badge/React-19-61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
+![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4)
+![Recharts](https://img.shields.io/badge/Recharts-Gráficos-8884D8)
 
-O frontend entrega a experiencia principal do usuario:
+---
 
-- autenticacao e area de conta;
-- dashboard financeiro;
-- operacao de mesas, receitas, despesas, cartoes e faturas;
-- notificacoes;
-- fluxo completo do IAn, incluindo plano, sugestoes e acompanhamento mensal da meta.
+## 📋 Sobre o Projeto
 
-## Stack
+O frontend do **Controle Financeiro** foi construído com **Next.js 16**, **React 19** e **TypeScript**, oferecendo uma experiência responsiva e orientada à operação do dia a dia financeiro.
 
-- Next.js 16
-- React 19
-- TypeScript 5
-- Tailwind CSS 4
-- Axios
-- Recharts
-- ESLint 9
+### ✨ Principais Diferenciais
 
-## Estrutura principal
+- 📊 **Dashboard inteligente** com indicadores e gráficos
+- 👥 **Contexto por mesas** para colaboração financeira
+- 💳 **Gestão visual de cartões** e integração com faturas
+- 🧾 **Despesas completas** com pagamento, recorrência, parcelamento e comprovantes
+- 💰 **Receitas com confirmação** e recorrência
+- 🔔 **Notificações e alertas** no produto
+- 🧠 **IAn completo** com plano, sugestões e fechamento mensal da meta
+- 📱 **Interface responsiva** para desktop e mobile
+
+---
+
+## 🚀 Tecnologias Utilizadas
+
+### Core
+
+- **Next.js 16**
+- **React 19**
+- **TypeScript 5**
+
+### UI e Visualização
+
+- **Tailwind CSS 4**
+- **Recharts**
+
+### Integração
+
+- **Axios**
+
+### Qualidade
+
+- **ESLint 9**
+
+---
+
+## 📁 Estrutura do Projeto
 
 ```text
 frontend/
-|-- public/
-|-- src/
-|   |-- app/
-|   |   |-- dashboard/
-|   |   |   |-- cartoes/
-|   |   |   |-- categorias/
-|   |   |   |-- conta/
-|   |   |   |-- despesas/
-|   |   |   |-- ian/
-|   |   |   |-- mesas/
-|   |   |   `-- receitas/
-|   |   |-- login/
-|   |   |-- recuperar-senha/
-|   |   |-- registro/
-|   |   `-- resetar-senha/
-|   |-- components/
-|   |-- contexts/
-|   |-- hooks/
-|   |-- services/
-|   `-- types/
-|-- .env.local
-`-- package.json
+├── public/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx
+│   │   ├── login/
+│   │   ├── registro/
+│   │   ├── recuperar-senha/
+│   │   ├── resetar-senha/
+│   │   └── dashboard/
+│   │       ├── page.tsx
+│   │       ├── mesas/
+│   │       ├── receitas/
+│   │       ├── despesas/
+│   │       ├── categorias/
+│   │       ├── cartoes/
+│   │       ├── conta/
+│   │       └── ian/
+│   ├── components/
+│   ├── contexts/
+│   ├── hooks/
+│   ├── services/
+│   └── types/
+├── .env.local
+└── package.json
 ```
 
-## Instalar e rodar
+---
+
+## ⚙️ Instalação e Configuração
+
+### Pré-requisitos
+
+- Node.js 18+
+- Backend rodando em `http://localhost:3001`
+
+### Passo 1: Instale as dependências
 
 ```bash
 cd frontend
 npm install
 ```
+
+### Passo 2: Configure o ambiente
 
 Crie o arquivo `.env.local`:
 
@@ -63,48 +104,136 @@ Crie o arquivo `.env.local`:
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ```
 
-Se a variavel nao for definida, o frontend usa `http://localhost:3001/api` como fallback.
+Se a variável não for definida, o frontend usa esse mesmo valor como fallback.
 
-Desenvolvimento:
+### Passo 3: Rode a aplicação
+
+**Desenvolvimento:**
 
 ```bash
 npm run dev
 ```
 
-Build de producao:
+**Build de produção:**
 
 ```bash
 npm run build
 npm start
 ```
 
-Aplicacao em `http://localhost:3000`.
+Frontend em: **http://localhost:3000**
 
-## Fluxo tecnico
+---
 
-- o token JWT fica no `localStorage`;
-- `src/services/api.ts` injeta `Authorization: Bearer <token>` automaticamente;
-- a area autenticada usa `MesaContext` para definir a mesa ativa;
-- cada dominio possui um service dedicado em `src/services/`.
+## 🔐 Fluxo de Autenticação
 
-## Paginas principais
+A autenticação funciona com JWT:
 
-- `/login`
-- `/registro`
-- `/recuperar-senha`
-- `/resetar-senha/[token]`
-- `/dashboard`
-- `/dashboard/mesas`
-- `/dashboard/receitas`
-- `/dashboard/despesas`
-- `/dashboard/categorias`
-- `/dashboard/cartoes`
-- `/dashboard/conta`
-- `/dashboard/ian`
+1. Usuário faz login
+2. Token é salvo no `localStorage`
+3. O Axios injeta `Authorization: Bearer <token>`
+4. As páginas autenticadas consomem a API normalmente
+5. Fluxos protegidos dependem do token válido
 
-## Services principais
+---
 
-O frontend consome a API por services, incluindo:
+## 🎯 Funcionalidades da Interface
+
+### 1. 🔐 Autenticação e Conta
+
+- ✅ Login e cadastro
+- ✅ Recuperação e redefinição de senha
+- ✅ Perfil do usuário
+- ✅ Foto de perfil
+- ✅ Preferências
+- ✅ Troca de senha
+- ✅ Troca de email
+- ✅ Suporte
+
+### 2. 📊 Dashboard
+
+- ✅ KPIs financeiros
+- ✅ Gráficos de evolução mensal
+- ✅ Top categorias
+- ✅ Alertas de despesas
+- ✅ Filtros por mês e por mesa
+
+### 3. 👥 Mesas
+
+- ✅ Criação e gestão de mesas
+- ✅ Seleção de mesa ativa
+- ✅ Membros e convites
+- ✅ Contexto compartilhado entre telas
+
+### 4. 💰 Receitas
+
+- ✅ Cadastro
+- ✅ Confirmação de recebimento
+- ✅ Parcelamento
+- ✅ Recorrência
+- ✅ Soft delete
+
+### 5. 💸 Despesas
+
+- ✅ Cadastro completo
+- ✅ Pagamento com valor real
+- ✅ Parcelamento
+- ✅ Recorrência
+- ✅ Comprovantes
+- ✅ Integração com cartões e faturas
+
+### 6. 💳 Cartões e Faturas
+
+- ✅ Cadastro de cartões
+- ✅ Limites e vencimentos
+- ✅ Pagamento de faturas
+- ✅ Integração com despesas
+
+### 7. 🔔 Notificações
+
+- ✅ Badge de não lidas
+- ✅ Leitura individual e em lote
+- ✅ Alertas financeiros automáticos
+
+### 8. 🧠 IAn
+
+- ✅ Geração de plano financeiro
+- ✅ Ativação de estratégia
+- ✅ Sugestões de aplicação para pesquisa
+- ✅ Acompanhamento ao vivo da estratégia
+- ✅ Registro mensal da evolução da meta
+- ✅ Histórico mensal do patrimônio construído
+- ✅ Cálculo de percentual concluído, valor faltante e projeção
+- ✅ Resumo da carteira consolidada com base no histórico informado
+
+---
+
+## 🏗️ Padrões Arquiteturais
+
+### MesaContext
+
+O `MesaContext` define a mesa ativa da área autenticada. Ele é essencial para que receitas, despesas, dashboard e IAn operem no contexto correto.
+
+### Camada de Services
+
+O frontend usa services para centralizar as chamadas da API:
+
+```text
+Página -> Service -> Axios -> Backend
+```
+
+### Interceptor HTTP
+
+O arquivo `src/services/api.ts`:
+
+- injeta o token JWT automaticamente;
+- remove o `Content-Type` manual em requests com `FormData`, para permitir que o navegador monte o boundary corretamente.
+
+---
+
+## 🔌 Services Principais
+
+Entre os serviços do frontend, estão:
 
 - `authService.ts`
 - `mesaService.ts`
@@ -117,19 +246,22 @@ O frontend consome a API por services, incluindo:
 - `contaService.ts`
 - `ianService.ts`
 
-## IAn no frontend
+---
 
-A pagina `src/app/dashboard/ian/page.tsx` hoje suporta:
+## 🧠 IAn no Frontend
 
-- gerar um plano financeiro com base no objetivo e na mesa ativa;
-- ativar uma estrategia do IAn;
-- buscar sugestoes de aplicacao para pesquisa;
+A página `src/app/dashboard/ian/page.tsx` hoje suporta:
+
+- gerar um plano com base no objetivo e na mesa ativa;
+- ativar uma estratégia do IAn;
+- buscar sugestões de aplicação para pesquisa;
 - registrar fechamento mensal da meta;
-- informar valor guardado, dividendos e investimentos do mes;
-- visualizar progresso acumulado, percentual concluido e previsao de conclusao;
-- navegar pelo historico mensal e pelo resumo da carteira consolidada.
+- informar valor guardado, dividendos e investimentos do mês;
+- visualizar patrimônio acumulado, percentual concluído e previsão de conclusão;
+- acompanhar o histórico mensal;
+- visualizar o resumo da carteira consolidada.
 
-O service `src/services/ianService.ts` cobre os fluxos:
+O service `src/services/ianService.ts` cobre:
 
 ```text
 POST /ian/plano
@@ -139,27 +271,9 @@ POST /ian/registro-mensal
 POST /ian/sugestoes
 ```
 
-## Padroes importantes
+---
 
-### MesaContext
-
-As telas operacionais dependem da mesa ativa. O contexto fica na area autenticada e define o escopo dos dados que a pagina deve carregar.
-
-### Services
-
-O padrao predominante e:
-
-```text
-Pagina -> service -> axios -> API
-```
-
-Isso concentra tipagem, payloads e chamadas HTTP em um ponto previsivel.
-
-### Uploads
-
-Quando a chamada usa `FormData`, o interceptor remove manualmente o `Content-Type` para o browser montar o boundary correto.
-
-## Scripts
+## 🧪 Scripts Disponíveis
 
 ```bash
 npm run dev
@@ -168,10 +282,26 @@ npm start
 npm run lint
 ```
 
-## Observacao sobre validacao
+---
 
-O frontend compila com `npm run build`. O lint existe e deve continuar sendo usado, mas pode apontar pendencias antigas em telas fora do escopo de uma feature especifica.
+## 🚀 Deploy
 
-## Licenca
+### Opções Recomendadas
 
-Este modulo segue a licenca MIT do projeto principal.
+- **Vercel**
+- **Netlify**
+- **Render**
+
+### Checklist de Produção
+
+1. Configurar `NEXT_PUBLIC_API_URL`
+2. Garantir CORS no backend para o domínio do frontend
+3. Rodar `npm run build`
+4. Validar autenticação, dashboard e IAn
+5. Conferir integração com a API e uploads
+
+---
+
+## 📝 Licença
+
+Este módulo segue a licença MIT do projeto principal.
