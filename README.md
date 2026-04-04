@@ -1,222 +1,98 @@
-# 💰 Controle Financeiro
+# Controle Financeiro
 
-> Plataforma full stack para gestão financeira pessoal e colaborativa, com autenticação completa, dashboard analítico, controle de receitas, despesas, cartões, faturas e convites para mesas compartilhadas.
+Plataforma full stack para gestao financeira pessoal e colaborativa, com frontend em Next.js e backend em Node.js + Express + MySQL.
 
-![Status](https://img.shields.io/badge/Status-Em%20desenvolvimento-blue)
-![Frontend](https://img.shields.io/badge/Frontend-Next.js%2016-black)
-![Backend](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-green)
-![Database](https://img.shields.io/badge/Database-MySQL%208.0-blue)
-![License](https://img.shields.io/badge/License-MIT-brightgreen)
+## Visao geral
 
----
+O projeto e dividido em dois modulos:
 
-## 📋 Sobre o Projeto
+- `backend/`: API REST, autenticacao, regras de negocio, integracoes de email e Swagger.
+- `frontend/`: aplicacao web com App Router, dashboard, telas operacionais e experiencia do usuario.
 
-O **Controle Financeiro** é uma aplicação completa que ajuda usuários a organizar sua vida financeira com recursos de categorização inteligente, controle de cartões com faturas, parcelamento, despesas recorrentes e colaboração entre pessoas através de mesas compartilhadas.
+Hoje o sistema cobre:
 
-O projeto é dividido em dois módulos independentes:
+- autenticacao com JWT, verificacao de email e recuperacao de senha;
+- mesas compartilhadas para organizacao colaborativa;
+- receitas, despesas, cartoes, faturas e notificacoes;
+- dashboard consolidado por mesa;
+- IAn, um assistente financeiro que monta planos, acompanha desvios e agora registra evolucao mensal da meta.
 
-- **Backend** (`backend/`) — API RESTful com Node.js + Express + MySQL
-- **Frontend** (`frontend/`) — Aplicação web com Next.js + React + TypeScript
+## Destaque recente: IAn com memoria mensal
 
----
+O IAn deixou de ser apenas informativo. Alem de gerar o plano e sugerir uma estrategia, ele agora permite:
 
-## ✨ Principais Funcionalidades
+- ativar uma linha de acompanhamento por mesa;
+- registrar fechamento mensal da meta;
+- informar quanto foi guardado no mes;
+- informar investimentos realizados e dividendos recebidos;
+- consolidar patrimonio acumulado, percentual da meta, valor faltante e previsao de conclusao;
+- manter um historico mensal e um resumo da carteira que o usuario vem construindo.
 
-### 🔐 Autenticação e Segurança
+Observacao importante:
 
-- Cadastro com verificação de email
-- Login com JWT (stateless)
-- Recuperação de senha por email
-- Troca de senha e email seguros (com confirmação)
-- Proteção contra SQL Injection (prepared statements)
-- Senhas criptografadas com bcrypt
+- as tabelas do IAn (`ian_planos` e `ian_registros_mensais`) sao criadas sob demanda pelo backend no primeiro uso do recurso;
+- elas nao dependem de migracao manual adicional para comecar a funcionar.
 
-### 👥 Colaboração por Mesas
+## Stack
 
-- Criação de mesas de controle financeiro (limite no plano free)
-- Convite de usuários por email
-- Aceite/recusa de convites com notificação
-- Papéis: criador (controle total) vs convidado
-- Gestão de membros com remoção e cancelamento de convites
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS 4, Recharts
+- Backend: Node.js, Express 5, MySQL 8, JWT, bcrypt, Nodemailer, Multer
+- Documentacao: Swagger UI + Swagger JSDoc
 
-### 💰 Gestão Financeira Completa
+## Estrutura do repositorio
 
-- **Receitas** — cadastro, parcelamento, recorrência, confirmação de recebimento (provisionado vs real)
-- **Despesas** — tipo (variável/fixa/assinatura), recorrência com cancelamento, parcelamento automático
-- **Cartões** — crédito e débito, limites real e pessoal, fechamento e vencimento, cores customizáveis
-- **Faturas** — geração automática por cartão/mês, pagamento com quitação em cascata
-- **Categorias** — separação por tipo (receita/despesa), soft delete com reativação
-- **Comprovantes** — upload de imagens ao pagar despesas
-
-### 📊 Dashboard e Inteligência
-
-- KPIs: receitas confirmadas, despesas pagas, saldo atual e previsto
-- Gráficos de evolução mensal (últimos 6 meses)
-- Top categorias de gastos com detalhamento
-- Alertas de despesas vencidas e vencendo hoje
-- Filtros por mês e por mesa
-- Consolidação multi-mesa
-
-### 📧 Comunicação
-
-- Emails transacionais (verificação, convites, recuperação de senha, troca de email)
-- Templates HTML profissionais
-- Sistema de notificações in-app ("sininho") com alertas financeiros automáticos
-
-### 👤 Área de Conta
-
-- Edição de perfil (nome, telefone, foto)
-- Preferências (moeda, formato de data, notificações)
-- Troca de senha e email com confirmação segura
-- Canal de suporte/SAC
-
----
-
-## 🧱 Arquitetura do Repositório
-
-```
+```text
 controleFinanceiro/
-├── backend/                      # API REST
-│   ├── src/
-│   │   ├── config/
-│   │   │   └── database.js       # Pool de conexão MySQL
-│   │   ├── controllers/          # 11 controllers
-│   │   │   ├── authController.js
-│   │   │   ├── mesaController.js
-│   │   │   ├── mesaMembroController.js
-│   │   │   ├── categoriaController.js
-│   │   │   ├── bandeiraController.js
-│   │   │   ├── tipoPagamentoController.js
-│   │   │   ├── cartaoController.js
-│   │   │   ├── receitaController.js
-│   │   │   ├── despesaController.js
-│   │   │   ├── faturaController.js
-│   │   │   ├── conviteController.js
-│   │   │   ├── notificacaoController.js
-│   │   │   ├── alertasController.js
-│   │   │   ├── dashboardController.js
-│   │   │   └── contaController.js
-│   │   ├── models/               # 11 models
-│   │   │   ├── User.js
-│   │   │   ├── Mesa.js
-│   │   │   ├── Categoria.js
-│   │   │   ├── Bandeira.js
-│   │   │   ├── TipoPagamento.js
-│   │   │   ├── Cartao.js
-│   │   │   ├── Receita.js
-│   │   │   ├── Despesa.js
-│   │   │   ├── Fatura.js
-│   │   │   ├── Convite.js
-│   │   │   ├── Notificacao.js
-│   │   │   └── TokenVerificacao.js
-│   │   ├── routes/               # 15 arquivos de rota
-│   │   │   ├── authRoutes.js
-│   │   │   ├── mesaRoutes.js
-│   │   │   ├── mesaMembroRoutes.js
-│   │   │   ├── categoriaRoutes.js
-│   │   │   ├── bandeiraRoutes.js
-│   │   │   ├── tipoPagamentoRoutes.js
-│   │   │   ├── cartaoRoutes.js
-│   │   │   ├── receitaRoutes.js
-│   │   │   ├── despesaRoutes.js
-│   │   │   ├── faturaRoutes.js
-│   │   │   ├── conviteRoutes.js
-│   │   │   ├── notificacaoRoutes.js
-│   │   │   ├── dashboardRoutes.js
-│   │   │   └── contaRoutes.js
-│   │   ├── middlewares/
-│   │   │   ├── authMiddleware.js  # Verificação de JWT
-│   │   │   └── uploadMiddleware.js# Configuração Multer
-│   │   └── services/
-│   │       └── emailService.js    # Envio de emails transacionais
-│   ├── database/
-│   │   └── schema.sql             # Script completo de criação do banco
-│   ├── uploads/                   # Comprovantes de pagamento
-│   ├── swagger.js                 # Configuração Swagger
-│   ├── server.js                  # Arquivo principal
-│   ├── .env.example               # Exemplo de configuração
-│   └── package.json
-│
-├── frontend/                      # Aplicação Web
-│   ├── src/
-│   │   ├── app/                   # 10 páginas (App Router)
-│   │   ├── components/            # Componentes reutilizáveis
-│   │   ├── contexts/              # MesaContext (estado global)
-│   │   ├── services/              # 14 services de integração
-│   │   ├── types/                 # Tipagens TypeScript
-│   │   └── lib/                   # Utilitários
-│   ├── public/                    # Assets estáticos
-│   └── package.json
-│
-├── LICENSE
-└── README.md                      # ← Este arquivo
+|-- backend/
+|   |-- database/
+|   |-- public/
+|   |-- src/
+|   |   |-- config/
+|   |   |-- controllers/
+|   |   |-- docs/
+|   |   |-- middlewares/
+|   |   |-- models/
+|   |   |-- routes/
+|   |   |-- services/
+|   |   `-- utils/
+|   |-- .env.example
+|   |-- package.json
+|   |-- server.js
+|   `-- swagger.js
+|-- frontend/
+|   |-- public/
+|   |-- src/
+|   |   |-- app/
+|   |   |-- components/
+|   |   |-- contexts/
+|   |   |-- hooks/
+|   |   |-- services/
+|   |   `-- types/
+|   |-- .env.local
+|   `-- package.json
+`-- README.md
 ```
 
----
+## Como rodar
 
-## 🗄️ Banco de Dados
+### 1. Banco de dados
 
-### 13 Tabelas
-
-| Tabela               | Descrição                                               |
-| -------------------- | ------------------------------------------------------- |
-| `users`              | Usuários com perfil, foto, preferências e plano         |
-| `tokens_verificacao` | Tokens de verificação de email e recuperação de senha   |
-| `mesas`              | Mesas de controle financeiro                            |
-| `mesa_usuarios`      | Relacionamento N:N entre usuários e mesas (com papel)   |
-| `categorias`         | Categorias de receitas e despesas                       |
-| `bandeiras`          | Bandeiras de cartão (Visa, Mastercard, etc)             |
-| `tipos_pagamento`    | Tipos de pagamento (Crédito, Débito, Pix, etc)          |
-| `cartoes`            | Cartões de crédito/débito com limites e vencimento      |
-| `faturas`            | Faturas mensais dos cartões                             |
-| `receitas`           | Receitas com confirmação, parcelas e recorrência        |
-| `despesas`           | Despesas com tipo, parcelas, recorrência e comprovantes |
-| `convites`           | Convites para participar de mesas                       |
-| `notificacoes`       | Sistema de notificações e alertas financeiros           |
-
-### Diagrama ER Simplificado
-
-```
-users (1) ──→ (N) mesas (como criador)
-users (N) ←──→ (N) mesas (através de mesa_usuarios)
-users (1) ──→ (N) cartoes
-cartoes (1) ──→ (N) faturas
-mesas (1) ──→ (N) receitas
-mesas (1) ──→ (N) despesas
-faturas (1) ──→ (N) despesas (despesas de cartão de crédito)
-categorias (1) ──→ (N) receitas/despesas
-tipos_pagamento (1) ──→ (N) receitas/despesas/cartoes
-bandeiras (1) ──→ (N) cartoes
-```
-
----
-
-## ⚙️ Como Rodar o Projeto
-
-### Pré-requisitos
-
-- **Node.js** 18+
-- **MySQL** 8.0+
-- **Conta de email** (Gmail com senha de app, ou Mailtrap para dev)
-
-### 1) Banco de Dados
+Crie o schema principal:
 
 ```bash
 mysql -u root -p < backend/database/schema.sql
 ```
 
-Isso cria o banco `controle_financeiro` com todas as 13 tabelas, categorias padrão, bandeiras e tipos de pagamento.
-
-### 2) Backend
+### 2. Backend
 
 ```bash
 cd backend
 npm install
 cp .env.example .env
+npm run dev
 ```
 
-Configure o `.env` com banco, JWT e email:
+Variaveis importantes:
 
 ```env
 PORT=3001
@@ -224,7 +100,7 @@ DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=sua_senha
 DB_NAME=controle_financeiro
-JWT_SECRET=sua_chave_secreta_super_segura
+JWT_SECRET=sua_chave_secreta
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=seu_email@gmail.com
@@ -232,19 +108,15 @@ EMAIL_PASSWORD=sua_senha_de_app
 EMAIL_FROM=Controle Financeiro <seu_email@gmail.com>
 APP_URL=http://localhost:3001
 FRONTEND_URL=http://localhost:3000
+BRAPI_TOKEN=
 ```
 
-Inicie o servidor:
+Documentacao da API:
 
-```bash
-npm run dev
-```
+- Swagger padrao: `http://localhost:3001/api-docs`
+- Swagger com tema alternativo: `http://localhost:3001/api-docs-fancy`
 
-Backend em: **http://localhost:3001** | Swagger em: **http://localhost:3001/api-docs**
-
-### 3) Frontend
-
-Em outro terminal:
+### 3. Frontend
 
 ```bash
 cd frontend
@@ -257,136 +129,66 @@ Crie `frontend/.env.local`:
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ```
 
-Inicie a aplicação:
+Suba a aplicacao:
 
 ```bash
 npm run dev
 ```
 
-Frontend em: **http://localhost:3000**
+Frontend em `http://localhost:3000`.
 
----
+## Modulos principais
 
-## 📡 API — Visão Geral
+- `Auth`: cadastro, login, verificacao de email, recuperacao e reset de senha.
+- `Mesa`: contexto colaborativo para separar os dados financeiros.
+- `Receitas` e `Despesas`: fluxo financeiro principal, com recorrencia, parcelamento e confirmacoes.
+- `Cartoes` e `Faturas`: controle de limites, vencimentos e pagamento consolidado.
+- `Dashboard`: indicadores e consolidacoes por periodo e por mesa.
+- `Conta`: perfil, foto, preferencias, troca de senha, troca de email e suporte.
+- `IAn`: plano financeiro, sugestoes de aplicacao e evolucao mensal da meta.
 
-A API possui **55+ endpoints** totalmente documentados via Swagger UI.
+## Rotas de alto nivel
 
-### Módulos Principais
+Algumas rotas importantes da API:
 
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+
+GET    /api/mesa
+POST   /api/mesa
+
+GET    /api/dashboard
+
+POST   /api/receitas
+POST   /api/despesas
+PATCH  /api/faturas/:id/pagar
+
+GET    /api/ian/plano-ativo
+POST   /api/ian/plano
+POST   /api/ian/ativar
+POST   /api/ian/registro-mensal
+POST   /api/ian/sugestoes
 ```
-POST   /api/auth/register                    # Registrar
-POST   /api/auth/login                       # Login
-GET    /api/auth/verificar-email/:token       # Verificar email
 
-POST   /api/mesas                             # Criar mesa
-GET    /api/mesas                             # Listar mesas do usuário
+Para a lista completa, use o Swagger.
 
-POST   /api/receitas                          # Criar receita(s)
-PATCH  /api/receitas/:id/confirmar            # Confirmar recebimento
+## Estado atual da documentacao
 
-POST   /api/despesas                          # Criar despesa(s)
-PATCH  /api/despesas/:id/pagar                # Marcar como paga (com comprovante)
+Os READMEs foram alinhados com:
 
-GET    /api/faturas?cartao_id=X&mesa_id=Y     # Faturas de um cartão
-PATCH  /api/faturas/:id/pagar                 # Pagar fatura inteira
+- estrutura real de pastas;
+- Express 5 no backend;
+- pagina do IAn no frontend;
+- novo fluxo mensal do IAn;
+- `BRAPI_TOKEN` opcional;
+- script correto de desenvolvimento do backend (`nodemon server.js`).
 
-GET    /api/dashboard?mes=2026-03             # Dashboard consolidado
+## Documentacao por modulo
 
-POST   /api/convites                          # Enviar convite
-GET    /api/notificacoes                      # Listar notificações
+- Backend: [backend/README.md](backend/README.md)
+- Frontend: [frontend/README.md](frontend/README.md)
 
-GET    /api/conta/perfil                      # Dados da conta
-PUT    /api/conta/preferencias                # Atualizar preferências
-```
+## Licenca
 
-**Documentação completa interativa:** `http://localhost:3001/api-docs`
-
----
-
-## 📊 Estatísticas do Projeto
-
-| Métrica            | Backend | Frontend | Total    |
-| ------------------ | ------- | -------- | -------- |
-| Linhas de código   | ~5.000+ | ~6.000+  | ~11.000+ |
-| Endpoints/Páginas  | 55+     | 10       | —        |
-| Tabelas/Services   | 13      | 14       | —        |
-| Models/Componentes | 12      | 5+       | —        |
-| Controllers        | 15      | —        | —        |
-
----
-
-## 🔒 Segurança
-
-- ✅ Senhas criptografadas com bcrypt (salt rounds: 10)
-- ✅ Autenticação stateless com JWT
-- ✅ Tokens com expiração configurável
-- ✅ Validação de tipos de arquivo no upload (apenas imagens, máx 5MB)
-- ✅ Proteção contra SQL Injection (prepared statements)
-- ✅ CORS configurado por ambiente
-- ✅ Verificação de email obrigatória
-- ✅ Troca de senha/email com confirmação por token
-- ✅ Separação de permissões (criador vs convidado)
-- ✅ Soft delete em entidades críticas (categorias, cartões, despesas, receitas)
-
----
-
-## 🚀 Deploy
-
-### Plataformas Recomendadas
-
-| Componente   | Opções                                   |
-| ------------ | ---------------------------------------- |
-| **Frontend** | Vercel (recomendado), Netlify, Render    |
-| **Backend**  | Railway, Render, DigitalOcean, AWS       |
-| **MySQL**    | PlanetScale, Railway, serviço gerenciado |
-
-### Checklist de Produção
-
-1. Configurar variáveis de ambiente por ambiente (dev/staging/prod)
-2. Habilitar HTTPS em ambos os serviços
-3. Ajustar CORS no backend para o domínio do frontend
-4. Usar serviço de email profissional (SendGrid, Amazon SES)
-5. Configurar backup automático do banco
-6. Monitorar logs e erros de autenticação
-7. Usar PM2 para gerenciar o processo Node.js em VPS
-
----
-
-## 🤝 Contribuição
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/minha-feature`)
-3. Faça commit das alterações (`git commit -m 'feat: descrição'`)
-4. Envie para o repositório (`git push origin feature/minha-feature`)
-5. Abra um Pull Request
-
----
-
-## 📝 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo [`LICENSE`](LICENSE) para mais detalhes.
-
----
-
-## 📚 Documentações por Módulo
-
-Para detalhes completos de cada parte do sistema:
-
-- **Backend:** [`backend/README.md`](backend/README.md) — endpoints, models, configuração do banco
-- **Frontend:** [`frontend/README.md`](frontend/README.md) — páginas, services, padrões de UI
-
----
-
-## 👨‍💻 Autor
-
-**José Aroldo Soares Bezerra** — NASAM Dev.
-
-- Email: joseharoldoparente@gmail.com
-- LinkedIn: [José Aroldo Soares](https://www.linkedin.com/in/josearoldosoares/)
-- GitHub: [@zeharoldoparente](https://github.com/zeharoldoparente)
-
----
-
-<p align="center">
-  Feito com ❤️ por José Aroldo | NASAM Dev.
-</p>
+MIT. Veja [LICENSE](LICENSE).
