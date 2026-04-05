@@ -21,13 +21,16 @@ export default function LoginPage() {
       const token = params.get("convite") || "";
       const emailParam = params.get("email") || "";
       const emailVerificado = params.get("email_verificado") === "1";
+      const sessionExpired = params.get("session_expired") === "1";
 
       setConviteToken(token);
       setEmailConvite(emailParam);
       setSucesso(
          emailVerificado
             ? "Email confirmado com sucesso. Agora e so entrar na sua conta."
-            : "",
+            : sessionExpired
+              ? "Sua sessao expirou. Entre novamente para continuar."
+              : "",
       );
 
       if (token && authService.isAuthenticated()) {

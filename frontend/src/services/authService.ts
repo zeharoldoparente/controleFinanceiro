@@ -1,4 +1,5 @@
 import api from "./api";
+import { clearAuthSession, getValidToken } from "@/lib/authSession";
 
 interface LoginData {
    email: string;
@@ -40,15 +41,16 @@ class AuthService {
    }
 
    logout() {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      clearAuthSession();
    }
 
    isAuthenticated(): boolean {
-      return !!localStorage.getItem("token");
+      return !!getValidToken();
    }
 
    getUser() {
+      if (!this.isAuthenticated()) return null;
+
       const user = localStorage.getItem("user");
       return user ? JSON.parse(user) : null;
    }
