@@ -340,6 +340,134 @@ class Cartao {
       );
    }
 
+   /**
+    * Soma, por cartão e por mês de vencimento da fatura, o total lançado e
+    * o que ainda está em aberto (não pago). Considera todas as mesas, pois o
+    * limite do cartão é único para o dono.
+    */
+   static async totaisPorFatura(userId) {
+      const [rows] = await db.query(
+         `SELECT
+            f.cartao_id,
+            DATE_FORMAT(f.data_vencimento, '%Y-%m') AS mes,
+            COALESCE(SUM(d.valor_provisionado), 0) AS total,
+            COALESCE(SUM(
+               CASE
+                  WHEN d.paga = TRUE OR f.status = 'paga' THEN 0
+                  ELSE d.valor_provisionado
+               END
+            ), 0) AS em_aberto
+          FROM despesas d
+          INNER JOIN faturas f ON d.fatura_id = f.id
+          INNER JOIN cartoes c ON f.cartao_id = c.id
+          WHERE c.user_id = ?
+            AND d.ativa = TRUE
+            AND f.ativa = 1
+          GROUP BY f.cartao_id, mes`,
+         [userId],
+      );
+      return rows;
+   }
+
+   static somarMeses(mes, quantidade) {
+      const [ano, m] = mes.split("-").map(Number);
+      const data = new Date(ano, m - 1 + quantidade, 1);
+      return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
+   }
+
+   /**
+    * Monta o resumo de limite de um cartão de crédito.
+    *
+    * Regra: cada parcela não paga ocupa o limite até a fatura em que ela cai
+    * ser paga. Assim:
+    *   - disponivel_atual = limite - tudo que está em aberto (todas as faturas)
+    *   - para cada mês M da projeção, limite_apos_pagamento considera pagas
+    *     todas as faturas até M, restando ocupado só o que vence depois de M.
+    */
+   static calcularResumoLimite(cartao, linhas, mesInicial, meses = 6) {
+      const toNum = (v) => parseFloat(v ?? 0) || 0;
+      const arred = (v) => Math.round(v * 100) / 100;
+
+      const limite = toNum(cartao.limite_real) || toNum(cartao.limite_pessoal);
+      const limitePessoal = toNum(cartao.limite_pessoal) || null;
+
+      const porMes = new Map();
+      for (const l of linhas) {
+         porMes.set(l.mes, {
+            total: toNum(l.total),
+            emAberto: toNum(l.em_aberto),
+         });
+      }
+
+      const emAbertoDepoisDe = (mes) => {
+         let soma = 0;
+         for (const [m, v] of porMes) if (m > mes) soma += v.emAberto;
+         return soma;
+      };
+
+      let comprometido = 0;
+      let atrasado = 0;
+      for (const [m, v] of porMes) {
+         comprometido += v.emAberto;
+         if (m < mesInicial) atrasado += v.emAberto;
+      }
+
+      const projecao = [];
+      for (let i = 0; i < meses; i++) {
+         const mes = this.somarMeses(mesInicial, i);
+         const dadosMes = porMes.get(mes) || { total: 0, emAberto: 0 };
+         const ocupadoApos = emAbertoDepoisDe(mes);
+         projecao.push({
+            mes,
+            fatura_prevista: arred(dadosMes.total),
+            fatura_em_aberto: arred(dadosMes.emAberto),
+            limite_comprometido_apos_pagamento: arred(ocupadoApos),
+            limite_disponivel_apos_pagamento: limite
+               ? arred(limite - ocupadoApos)
+               : null,
+         });
+      }
+
+      return {
+         cartao_id: cartao.id,
+         limite: limite || null,
+         limite_pessoal: limitePessoal,
+         limite_comprometido: arred(comprometido),
+         limite_disponivel: limite ? arred(limite - comprometido) : null,
+         percentual_usado: limite
+            ? arred(Math.min(100, Math.max(0, (comprometido / limite) * 100)))
+            : null,
+         faturas_atrasadas: arred(atrasado),
+         fatura_mes_atual: projecao[0]?.fatura_prevista ?? 0,
+         projecao,
+      };
+   }
+
+   static async resumoLimites(userId, meses = 6, mesInicial) {
+      const inicio =
+         mesInicial ||
+         (() => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+         })();
+
+      const cartoes = (await this.findAll(userId)).filter(
+         (c) => c.tipo === "credito",
+      );
+      if (!cartoes.length) return [];
+
+      const linhas = await this.totaisPorFatura(userId);
+
+      return cartoes.map((cartao) =>
+         this.calcularResumoLimite(
+            cartao,
+            linhas.filter((l) => Number(l.cartao_id) === Number(cartao.id)),
+            inicio,
+            meses,
+         ),
+      );
+   }
+
    static async delete(id, userId) {
       await db.query("DELETE FROM cartoes WHERE id = ? AND user_id = ?", [
          id,

@@ -100,6 +100,30 @@ class CartaoController {
       }
    }
 
+   static async limites(req, res) {
+      try {
+         const userId = req.userId;
+         const { meses, mes_inicial } = req.query;
+
+         const quantidade = Math.min(24, Math.max(1, parseInt(meses) || 6));
+         if (mes_inicial && !/^\d{4}-(0[1-9]|1[0-2])$/.test(mes_inicial)) {
+            return res
+               .status(400)
+               .json({ error: "mes_inicial deve estar no formato YYYY-MM" });
+         }
+
+         const limites = await Cartao.resumoLimites(
+            userId,
+            quantidade,
+            mes_inicial,
+         );
+         res.json({ limites });
+      } catch (error) {
+         console.error(error);
+         res.status(500).json({ error: "Erro ao calcular limites dos cartões" });
+      }
+   }
+
    static async show(req, res) {
       try {
          const userId = req.userId;

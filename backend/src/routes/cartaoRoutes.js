@@ -144,6 +144,93 @@ router.get("/", CartaoController.list);
 
 /**
  * @swagger
+ * /api/cartoes/limites:
+ *   get:
+ *     summary: Limite disponível e previsão por cartão de crédito
+ *     description: |
+ *       Para cada cartão de crédito ativo do usuário, retorna o limite já comprometido
+ *       (parcelas e compras ainda não pagas, em todas as mesas), o limite disponível hoje
+ *       e uma projeção mês a mês com o valor previsto de cada fatura e o limite que ficará
+ *       livre após o pagamento dela.
+ *     tags: [Cartões]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: meses
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 24
+ *         description: Quantidade de meses da projeção (padrão 6)
+ *         example: 6
+ *       - in: query
+ *         name: mes_inicial
+ *         schema:
+ *           type: string
+ *         description: Mês inicial da projeção no formato YYYY-MM (padrão é o mês atual)
+ *         example: 2026-10
+ *     responses:
+ *       200:
+ *         description: Resumo de limites por cartão
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 limites:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       cartao_id:
+ *                         type: integer
+ *                         example: 1
+ *                       limite:
+ *                         type: number
+ *                         example: 5000
+ *                       limite_comprometido:
+ *                         type: number
+ *                         example: 1800
+ *                       limite_disponivel:
+ *                         type: number
+ *                         example: 3200
+ *                       percentual_usado:
+ *                         type: number
+ *                         example: 36
+ *                       faturas_atrasadas:
+ *                         type: number
+ *                         example: 0
+ *                       fatura_mes_atual:
+ *                         type: number
+ *                         example: 600
+ *                       projecao:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             mes:
+ *                               type: string
+ *                               example: 2026-11
+ *                             fatura_prevista:
+ *                               type: number
+ *                               example: 600
+ *                             fatura_em_aberto:
+ *                               type: number
+ *                               example: 600
+ *                             limite_comprometido_apos_pagamento:
+ *                               type: number
+ *                               example: 600
+ *                             limite_disponivel_apos_pagamento:
+ *                               type: number
+ *                               example: 4400
+ *       400:
+ *         description: Parâmetros inválidos
+ */
+router.get("/limites", CartaoController.limites);
+
+/**
+ * @swagger
  * /api/cartoes/{id}:
  *   get:
  *     summary: Buscar cartão específico

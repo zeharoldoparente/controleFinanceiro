@@ -28,6 +28,26 @@ export interface CartaoCreate {
    cor?: string;
 }
 
+export interface ProjecaoLimiteMes {
+   mes: string;
+   fatura_prevista: number;
+   fatura_em_aberto: number;
+   limite_comprometido_apos_pagamento: number;
+   limite_disponivel_apos_pagamento: number | null;
+}
+
+export interface ResumoLimiteCartao {
+   cartao_id: number;
+   limite: number | null;
+   limite_pessoal: number | null;
+   limite_comprometido: number;
+   limite_disponivel: number | null;
+   percentual_usado: number | null;
+   faturas_atrasadas: number;
+   fatura_mes_atual: number;
+   projecao: ProjecaoLimiteMes[];
+}
+
 const cartaoService = {
    listar: async (incluirInativas: boolean = false, mesaId?: number) => {
       const params = new URLSearchParams();
@@ -36,6 +56,13 @@ const cartaoService = {
 
       const response = await api.get(`/cartoes?${params.toString()}`);
       return response.data.cartoes as Cartao[];
+   },
+
+   limites: async (meses: number = 6) => {
+      const response = await api.get("/cartoes/limites", {
+         params: { meses },
+      });
+      return response.data.limites as ResumoLimiteCartao[];
    },
 
    buscar: async (id: number) => {

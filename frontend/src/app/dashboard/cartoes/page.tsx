@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import authService from "@/services/authService";
-import cartaoService, { Cartao, CartaoCreate } from "@/services/cartaoService";
+import cartaoService, {
+   Cartao,
+   CartaoCreate,
+   ResumoLimiteCartao,
+} from "@/services/cartaoService";
 import bandeiraService, { Bandeira } from "@/services/bandeiraService";
 import despesaService, { Despesa } from "@/services/despesaService";
 import faturaService, {
@@ -73,16 +77,156 @@ function formatarData(data: string) {
    return `${dia}/${mes}/${ano}`;
 }
 
+function formatarMesCurto(mes: string) {
+   const nomes = [
+      "Jan",
+      "Fev",
+      "Mar",
+      "Abr",
+      "Mai",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Set",
+      "Out",
+      "Nov",
+      "Dez",
+   ];
+   const [ano, m] = mes.split("-").map(Number);
+   return `${nomes[m - 1]}/${String(ano).slice(2)}`;
+}
+
 const MESES = gerarMeses();
+
+// ─── Painel de Limite e Previsão ──────────────────────────────────────────────
+
+function LimitePanel({ resumo }: { resumo: ResumoLimiteCartao }) {
+   if (!resumo.limite) {
+      return (
+         <div className="px-4 py-3 border-b border-gray-100 text-xs text-gray-400 italic">
+            Informe o limite do cartão para acompanhar o saldo disponível.
+         </div>
+      );
+   }
+
+   const disponivel = resumo.limite_disponivel ?? 0;
+
+   return (
+      <div className="border-b border-gray-100">
+         <div className="flex border-b border-gray-100">
+            <div className="flex-1 px-3 py-2.5 text-center border-r border-gray-100">
+               <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                  Limite
+               </p>
+               <p className="text-sm font-bold text-gray-700">
+                  {formatarValor(resumo.limite)}
+               </p>
+            </div>
+            <div className="flex-1 px-3 py-2.5 text-center border-r border-gray-100">
+               <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                  Comprometido
+               </p>
+               <p className="text-sm font-bold text-orange-500">
+                  {formatarValor(resumo.limite_comprometido)}
+               </p>
+            </div>
+            <div className="flex-1 px-3 py-2.5 text-center">
+               <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                  Disponível
+               </p>
+               <p
+                  className={`text-sm font-bold ${disponivel < 0 ? "text-red-600" : "text-green-600"}`}
+               >
+                  {formatarValor(disponivel)}
+               </p>
+            </div>
+         </div>
+
+         {resumo.faturas_atrasadas > 0 && (
+            <div className="px-4 py-2 bg-red-50 text-red-700 text-xs border-b border-red-100">
+               {formatarValor(resumo.faturas_atrasadas)} em faturas anteriores
+               ainda não pagas ocupando o limite.
+            </div>
+         )}
+
+         <div className="px-4 pt-2.5 pb-1">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">
+               Previsão dos próximos meses
+            </p>
+         </div>
+         <div className="px-2 pb-2 overflow-x-auto">
+            <table className="w-full text-xs">
+               <thead>
+                  <tr className="text-[10px] text-gray-400 uppercase tracking-wider">
+                     <th className="text-left font-medium px-2 py-1">Mês</th>
+                     <th className="text-right font-medium px-2 py-1">Fatura</th>
+                     <th
+                        className="text-right font-medium px-2 py-1"
+                        title="Limite livre depois de pagar a fatura deste mês"
+                     >
+                        Limite após pagar
+                     </th>
+                  </tr>
+               </thead>
+               <tbody>
+                  {resumo.projecao.map((p) => {
+                     const livre = p.limite_disponivel_apos_pagamento ?? 0;
+                     const pct = resumo.limite
+                        ? Math.max(
+                             0,
+                             Math.min(100, (livre / resumo.limite) * 100),
+                          )
+                        : 0;
+                     const paga =
+                        p.fatura_prevista > 0 && p.fatura_em_aberto === 0;
+                     return (
+                        <tr key={p.mes} className="border-t border-gray-50">
+                           <td className="px-2 py-1.5 text-gray-600 font-medium">
+                              {formatarMesCurto(p.mes)}
+                           </td>
+                           <td
+                              className={`px-2 py-1.5 text-right font-semibold ${paga ? "text-green-600" : "text-gray-700"}`}
+                           >
+                              {formatarValor(p.fatura_prevista)}
+                              {paga && " ✓"}
+                           </td>
+                           <td className="px-2 py-1.5 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                 <div className="hidden min-[400px]:block w-12 bg-gray-100 rounded-full h-1.5">
+                                    <div
+                                       className="bg-green-500 h-1.5 rounded-full"
+                                       style={{ width: `${pct}%` }}
+                                    />
+                                 </div>
+                                 <span
+                                    className={`font-semibold ${livre < 0 ? "text-red-600" : "text-green-600"}`}
+                                 >
+                                    {formatarValor(livre)}
+                                 </span>
+                              </div>
+                           </td>
+                        </tr>
+                     );
+                  })}
+               </tbody>
+            </table>
+         </div>
+      </div>
+   );
+}
 
 // ─── Painel de Fatura / Transações ────────────────────────────────────────────
 
 function InvoicePanel({
    cartao,
    mesaSelecionadaId,
+   resumoLimite,
+   onAlterado,
 }: {
    cartao: Cartao;
    mesaSelecionadaId: number;
+   resumoLimite?: ResumoLimiteCartao;
+   onAlterado?: () => void;
 }) {
    const [mesFatura, setMesFatura] = useState(mesAtual());
    const [loading, setLoading] = useState(false);
@@ -166,6 +310,7 @@ function InvoicePanel({
          setMsgSucesso("Fatura paga com sucesso!");
          setTimeout(() => setMsgSucesso(""), 3000);
          carregar();
+         onAlterado?.();
       } catch {
          // erro silencioso
       } finally {
@@ -184,6 +329,7 @@ function InvoicePanel({
          setMsgSucesso("Pagamento desfeito!");
          setTimeout(() => setMsgSucesso(""), 3000);
          carregar();
+         onAlterado?.();
       } catch {
          // erro silencioso
       } finally {
@@ -282,6 +428,9 @@ function InvoicePanel({
                ✓ {msgSucesso}
             </div>
          )}
+
+         {/* ══════════ CRÉDITO: Limite e previsão ══════════ */}
+         {isCredito && resumoLimite && <LimitePanel resumo={resumoLimite} />}
 
          {/* ══════════ CRÉDITO: Fatura ══════════ */}
          {isCredito && !loading && (
@@ -621,14 +770,18 @@ function InvoicePanel({
 // ─── Card Visual (reutilizado em mobile e desktop) ────────────────────────────
 function CartaoVisual({
    cartao,
+   resumoLimite,
    isSelected,
    onClick,
 }: {
    cartao: Cartao;
+   resumoLimite?: ResumoLimiteCartao;
    isSelected?: boolean;
    onClick?: () => void;
 }) {
-   const limiteParaCalculo = cartao.limite_pessoal || cartao.limite_real;
+   const limiteParaCalculo =
+      resumoLimite?.limite || cartao.limite_real || cartao.limite_pessoal;
+   const percentualUsado = resumoLimite?.percentual_usado ?? 0;
 
    return (
       <div
@@ -681,11 +834,20 @@ function CartaoVisual({
             {limiteParaCalculo ? (
                <div>
                   <div className="flex justify-between text-xs mb-1">
-                     <span className="opacity-75">Limite usado</span>
-                     <span className="font-semibold">0%</span>
+                     <span className="opacity-75">
+                        {resumoLimite?.limite_disponivel != null
+                           ? `Disponível ${formatarValor(resumoLimite.limite_disponivel)}`
+                           : "Limite usado"}
+                     </span>
+                     <span className="font-semibold">
+                        {Math.round(percentualUsado)}%
+                     </span>
                   </div>
                   <div className="w-full bg-white/30 rounded-full h-1.5">
-                     <div className="bg-white h-1.5 rounded-full w-0" />
+                     <div
+                        className="bg-white h-1.5 rounded-full transition-all"
+                        style={{ width: `${percentualUsado}%` }}
+                     />
                   </div>
                </div>
             ) : (
@@ -704,11 +866,15 @@ function WalletStack({
    onEditar,
    onToggle,
    mesaSelecionadaId,
+   limites,
+   onFaturaAlterada,
 }: {
    cartoes: Cartao[];
    onEditar: (c: Cartao) => void;
    onToggle: (c: Cartao) => void;
    mesaSelecionadaId: number | undefined;
+   limites: Record<number, ResumoLimiteCartao>;
+   onFaturaAlterada: () => void;
 }) {
    const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
    const [showInvoice, setShowInvoice] = useState(false);
@@ -738,6 +904,7 @@ function WalletStack({
                >
                   <CartaoVisual
                      cartao={cartoes[selectedIdx]}
+                     resumoLimite={limites[cartoes[selectedIdx].id]}
                      isSelected
                      onClick={() => {
                         setSelectedIdx(null);
@@ -841,6 +1008,8 @@ function WalletStack({
                      <InvoicePanel
                         cartao={cartoes[selectedIdx]}
                         mesaSelecionadaId={mesaSelecionadaId}
+                        resumoLimite={limites[cartoes[selectedIdx].id]}
+                        onAlterado={onFaturaAlterada}
                      />
                   )}
                </div>
@@ -921,7 +1090,10 @@ function WalletStack({
                         onClick={() => handleCardClick(idx)}
                      >
                         <div className={!cartao.ativa ? "opacity-50" : ""}>
-                           <CartaoVisual cartao={cartao} />
+                           <CartaoVisual
+                              cartao={cartao}
+                              resumoLimite={limites[cartao.id]}
+                           />
                         </div>
                         {isTop && (
                            <div className="absolute bottom-3 right-4 flex items-center gap-1 pointer-events-none">
@@ -945,6 +1117,9 @@ export default function CartoesPage() {
    const { mesaSelecionada, carregando: mesaCarregando } = useMesa();
 
    const [cartoes, setCartoes] = useState<Cartao[]>([]);
+   const [limites, setLimites] = useState<Record<number, ResumoLimiteCartao>>(
+      {},
+   );
    const [bandeiras, setBandeiras] = useState<Bandeira[]>([]);
    const [loading, setLoading] = useState(true);
    const [mostrarInativas, setMostrarInativas] = useState(false);
@@ -989,6 +1164,17 @@ export default function CartoesPage() {
          setErro("Erro ao carregar dados");
       } finally {
          setLoading(false);
+      }
+      carregarLimites();
+   };
+
+   // Falha aqui não bloqueia a tela: os cartões continuam aparecendo sem o resumo
+   const carregarLimites = async () => {
+      try {
+         const dados = await cartaoService.limites(6);
+         setLimites(Object.fromEntries(dados.map((l) => [l.cartao_id, l])));
+      } catch {
+         setLimites({});
       }
    };
 
@@ -1195,6 +1381,8 @@ export default function CartoesPage() {
                         onEditar={abrirModal}
                         onToggle={toggleAtiva}
                         mesaSelecionadaId={mesaSelecionada?.id}
+                        limites={limites}
+                        onFaturaAlterada={carregarLimites}
                      />
                   </div>
 
@@ -1209,6 +1397,7 @@ export default function CartoesPage() {
                            >
                               <CartaoVisual
                                  cartao={cartao}
+                                 resumoLimite={limites[cartao.id]}
                                  isSelected={isExpandido}
                                  onClick={() => toggleExpandido(cartao.id)}
                               />
@@ -1308,6 +1497,8 @@ export default function CartoesPage() {
                                  <InvoicePanel
                                     cartao={cartao}
                                     mesaSelecionadaId={mesaSelecionada.id}
+                                    resumoLimite={limites[cartao.id]}
+                                    onAlterado={carregarLimites}
                                  />
                               )}
                            </div>
